@@ -20,10 +20,10 @@ class NDGaussHermiteQuadrature:
         
         # draw quadrature nodes and weights in 1D 
         self.nodes, self.weights = hermgauss(n_points)
-        self.L = cholesky(Sigma, lower=True)
+        self.sigma = cholesky(Sigma, lower=True)
     
     def integrate(self):
-        d = len(self.mu)
+        d = len(self.mu) #number of risky assets
         result = 0.0
         
         # for each combination in quadrature points find the trasformed nodes, multiply by corresponding weight, and keep the sum
@@ -31,7 +31,7 @@ class NDGaussHermiteQuadrature:
             weight_prod = np.prod([self.weights[i] for i in indices])
             nodes_prod = np.array([self.nodes[i] for i in indices])
             
-            transformed_nodes = np.sqrt(2) * self.L @ nodes_prod + self.mu
+            transformed_nodes = np.sqrt(2) * self.sigma @ nodes_prod + self.mu
             
             f_value = self.func(transformed_nodes)
             
