@@ -63,21 +63,23 @@ class IlliquidAssetModel:
     
     def generate_quadrature_points(self, N, n_points=10):
         """Generate quadrature points and weights for multivariate integration."""
-        # Hermite-Gauss nodes and weights for 1D
-        nodes_1d, weights_1d = hermgauss(n_points)
+        # draw quadrature nodes (x) and weights (w) in 1D 
+        x, w = hermgauss(quad_points)
         
-        # Create all combinations for N-dimensional space
-        nodes_Nd = np.array(list(product(nodes_1d, repeat=N)))
-        weights_Nd = np.array(list(product(weights_1d, repeat=N)))
-        
-        # Product of weights for each combination
-        weights = np.prod(weights_Nd, axis=1)
+        # Constant related to Gauss-Hermite normalization
+        self.const = 1/ np.pi**(self.N/2)
+
+        # Multidimensional Gauss-Hermite quadrature setup
+        xn = np.array(list(itertools.product(*(x,) * self.N)))
+        self.wn = np.prod(np.array(list(itertools.product(*(w,) * self.N))), axis=1)
+        # transformed 
+        self.yn = np.sqrt(2.) * np.dot(self.sigma, xn.T).T + mu[None, :]
         
         return nodes_Nd, weights
     
-    def transformed_nodes(self):
-        """Transform the quadrature nodes to match the distribution of the random variables."""
-        return self.mu + np.dot(self.nodes, self.sigma.T) * np.sqrt(2)
+#    def transformed_nodes(self):
+#        """Transform the quadrature nodes to match the distribution of the random variables."""
+#        return self.mu + np.dot(self.nodes, self.sigma.T) * np.sqrt(2)
 
     def wealth_growth(self, theta_t, c_t, xi_t, dZ):
         """
