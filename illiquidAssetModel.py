@@ -1,6 +1,6 @@
 import numpy as np
 from numpy.polynomial.hermite import hermgauss
-from itertools import product
+import itertools
 from scipy.linalg import cholesky
 
 class IlliquidAssetModel:
@@ -23,9 +23,12 @@ class IlliquidAssetModel:
         None.
         '''
         self.mu = mu
-        self.N = len(self.mu)  # Number of risky assets
+        self.n = len(self.mu)  # Number of risk factors (corresponding to the num. of risky assets, incl. the illiquid one)
+
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
+        self.m = 10 #number of quadrature points 
+        
         self.sigma = cholesky(Sigma, lower=True)
         self.sigma_w = self.sigma[:-1, :]
         self.sigma_x = self.sigma[-1, :]
@@ -40,7 +43,26 @@ class IlliquidAssetModel:
         self.p = self.trading_probability(eta)
         
         # Generate quadrature points and weights
-        self.nodes, self.weights = self.generate_quadrature_points(self.N)
+        self.xn, self.Wn = self.generate_quadrature_points()
+        
+        # Create a grid over xi
+        self.gridpoints_Xi = 20
+        self.Xi_t = np.linspace(0,.99, gridpoints_Xi)
+        
+        # initialize
+        H_str
+        H0 =  
+        
+        
+        # loop over each gridpoin on xi
+            # fit cubic spline over H, start with the initialization
+            # get the optimal H_str, c, theta, xi_str-> code the optimizer
+            # evaluate the Bellman equation's RHS
+            # update the values on the function H,
+
+        
+        
+        # incert overarching loop over the value function improment
     
     def trading_probability(self, eta):
         """
@@ -61,36 +83,37 @@ class IlliquidAssetModel:
         else:
             return c**(1 - self.gamma) / (1 - self.gamma)
     
-    def generate_quadrature_points(self, N, n_points=10):
-        """Generate quadrature points and weights for multivariate integration."""
+    def generate_quadrature_points(self):
+        """
+        Generate quadrature points and weights for multivariate integration.
+        Note that mean-variance transformation of the nodes is done at the wealth process functions
+        """
         # draw quadrature nodes (x) and weights (w) in 1D 
-        x, w = hermgauss(quad_points)
+        x, w = hermgauss(self.m)
         
         # Constant related to Gauss-Hermite normalization
-        self.const = 1/ np.pi**(self.N/2)
+        self.const = 1/ np.pi**(self.n/2)
 
-        # Multidimensional Gauss-Hermite quadrature setup
-        xn = np.array(list(itertools.product(*(x,) * self.N)))
-        self.wn = np.prod(np.array(list(itertools.product(*(w,) * self.N))), axis=1)
-        # transformed 
-        self.yn = np.sqrt(2.) * np.dot(self.sigma, xn.T).T + mu[None, :]
+        # Multidimensional Gauss-Hermite quadrature setup. Get the Cartesian product of N copies of the quadrature nodes and weights
+        xn = np.array(list(itertools.product(*(x,) * self.n)))
+        wn = np.array(list(itertools.product(*(w,) * self.n)))
+        # get product of weights
+        Wn = np.prod(wn, axis=1) 
+        # get z variable (transformed nodes stacked, transpose the vertor row) 
         
-        return nodes_Nd, weights
+        return xn, Wn
     
-#    def transformed_nodes(self):
-#        """Transform the quadrature nodes to match the distribution of the random variables."""
-#        return self.mu + np.dot(self.nodes, self.sigma.T) * np.sqrt(2)
-
-    def wealth_growth(self, theta_t, c_t, xi_t, dZ):
+    def wealth_growth(self, theta_t, c_t, xi_t):
         """
         Evaluate the growth rates R_{w,t + \Delta t}, R_{x,t + \Delta t}, and R_{q,t + \Delta t}.
         Note that we multiply by sqrt(2) to accomodate the quadrature transformation
         """
+        dZ = self.xn*np.sqrt(2)
         # Liquid asset growth
-        R_w = 1 + (self.r + theta_t @ (self.mu_w - self.r) - c_t) * self.dt + theta_t @ self.sigma_w @ dZ * np.sqrt(self.dt)*np.sqrt(2
+        R_w = 1 + (self.r + theta_t @ (self.mu_w - self.r) - c_t) * self.dt + (theta_t @ self.sigma_w) @ dZ.T * np.sqrt(self.dt)
         
         # Illiquid asset growth
-        R_x = 1 + self.mu_x * self.dt + self.sigma_x @ dZ * np.sqrt(self.dt)*np.sqrt(2)
+        R_x = 1 + self.mu_x * self.dt + self.sigma_x @ dZ.T * np.sqrt(self.dt)
         
         # Total wealth growth
         R_q = (1 - xi_t) * R_w + xi_t * R_x
@@ -103,38 +126,30 @@ class IlliquidAssetModel:
     def expectation(self, transformed_nodes):
         """
         Calculate the expectation of a function using Hermite-Gauss quadrature.
-        
-        Parameters:
-        xi_t (float): Current illiquid asset share.
-        theta_t (np.array): Vector of weights.
-        c_t (float): Consumption rate.
-        function (callable): Function for which to calculate the expectation.
-        
-        Returns:
-        float: The calculated expectation.
+        Parameters:   transformed_nodes (float): correspond to f(x_i) where x are the GH quardature nodes        
+        Returns:      float: The calculated expectation.
         """
-        #transformed_nodes = self.transformed_nodes()
-        #expectations = []
-        
-        #for dZ in transformed_nodes:
-        #    _, _, R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t, dZ)
-        #    expectations.append(function(R_q))  # Apply function to R_q
-        
-        # Compute the expectation as the weighted sum
-        expectation = np.sum(self.weights * transformed_nodes) / np.pi**(self.N/2)
+        expectation = self.const*np.sum(self.Wn * transformed_nodes)
         return expectation
-    
-    def bellman_equation(self, xi_t, H_func, H_star):
+
+    def bellman_equation(self, xi_t, H_func):
         'TODO : integrate th'
-        R_q, xi_next = wealth_growth(self, theta_t, c_t, xi_t, dZ)
-        """Solve the Bellman equation."""
-        def objective(theta_t, c_t, dZ):
-            # Calculate the terms in the Bellman equation
-            util = self.utility(c_t * (1 - xi_t)) 
-            H_next_liq =  H_star * self.expectation(R_q**(1 - self.gamma))
-            H_next_illiq = self.expectation(R_q**(1 - self.gamma)) *  H_func(xi_next))
+
+        #get optimal controls        
+        H_str, theta_t_opt, c_t_opt =  self.optimize()
+        xi_t = .1
+        #get next period's dynamic
+        R_q, xi_next = self.wealth_growth(theta_t_opt, c_t_opt, xi_t)
+
+        # Calculate the terms in the Bellman equation
+        # get utility
+        util = self.utility(c_t_opt * (1 - xi_t))
+        # get terms in case of liquidity
+        H_next_liq =  H_star * self.expectation(R_q**(1 - self.gamma))
+        # get terms in case of illiquidity
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma)* H_func(xi_next))
             
-            return util* self.dt + self.delta *(self.p * H_next_liq + (1 - self.p) *H_next_illiq)
+        H_t = util* self.dt + self.delta *(self.p * H_next_liq + (1 - self.p) *H_next_illiq)
         
         # Create a lambda function that binds dZ to the objective function
         objective_with_dZ = lambda theta_t, c_t: objective(theta_t, c_t, dZ)
@@ -142,16 +157,19 @@ class IlliquidAssetModel:
         'TODO: Write the optimizer'
         H_t, optimal_theta_t, optimal_c_t = self.optimize(objective_with_dZ)
         return H_t, optimal_theta_t, optimal_c_t
+
     
-    def optimize(self, objective):
+    def optimize(self):
+        #, objective
         """Optimize the Bellman equation (dummy implementation for illustration)."""
+        # TODO 
         # In practice, use scipy.optimize or other methods to find the optimal theta_t and c_t.
         # This is a placeholder function.
-        H_t = 100
-        theta_t_opt = np.ones(self.mu_w.shape[0]) / self.mu_w.shape[0]  # Dummy equal weighting
+        H_str = 100
+        theta_t_opt =.2*np.ones(self.mu_w.shape[0]) # Dummy equal weighting
         c_t_opt = 0.02  # Dummy consumption rate
-        return H_t, theta_t_opt, c_t_opt
-    
+        return H_str, theta_t_opt, c_t_opt
+    '''
     def solve(self, xi_0, H_func, H_star):
         """Solve the dynamic problem."""
         xi_t = xi_0
@@ -160,7 +178,7 @@ class IlliquidAssetModel:
             # Update state based on the dynamics
             _, _, _, xi_t = self.simulate_growth(optimal_theta_t, optimal_c_t, xi_t, np.random.normal(size=(self.N-1,)))
             print(f"At time {t}, xi_t = {xi_t}, optimal_c_t = {optimal_c_t}")
-
+    '''
 # Example usage:
 # Define parameters
 mu = np.array([0.05, 0.06, 0.04])  # Example: two liquid assets and one illiquid asset
