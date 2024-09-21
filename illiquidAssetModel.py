@@ -2,6 +2,9 @@ import numpy as np
 from numpy.polynomial.hermite import hermgauss
 import itertools
 from scipy.linalg import cholesky
+from scipy.interpolate import UnivariateSpline
+from scipy.optimize import minimize, minimize_scalar
+
 
 class IlliquidAssetModel:
     def __init__(self, mu, Sigma, gamma, beta, eta, r, dt):
@@ -47,23 +50,12 @@ class IlliquidAssetModel:
         
         # Create a grid over xi
         self.gridpoints_Xi = 20
-        self.Xi_t = np.linspace(0,.99, gridpoints_Xi)
+        self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
         
         # initialize
-        H_str
-        H0 =  
-        
-        
-        # loop over each gridpoin on xi
-            # fit cubic spline over H, start with the initialization
-            # get the optimal H_str, c, theta, xi_str-> code the optimizer
-            # evaluate the Bellman equation's RHS
-            # update the values on the function H,
-
-        
-        
-        # incert overarching loop over the value function improment
-    
+        self.H_t_vals_opt  =  self.utility(.1*self.Xi_t)
+        self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt, s=0)
+        self.H_star = max(self.H_t_vals_opt)
     def trading_probability(self, eta):
         """
         Computes the trading probability p given the parameter eta and the time increment dt.
@@ -132,74 +124,87 @@ class IlliquidAssetModel:
         expectation = self.const*np.sum(self.Wn * transformed_nodes)
         return expectation
 
-    def bellman_equation(self, xi_t, H_func):
-        'TODO : integrate th'
-
-        #get optimal controls        
-        H_str, theta_t_opt, c_t_opt =  self.optimize()
-        xi_t = .1
-        #get next period's dynamic
-        R_q, xi_next = self.wealth_growth(theta_t_opt, c_t_opt, xi_t)
-
-        # Calculate the terms in the Bellman equation
-        # get utility
-        util = self.utility(c_t_opt * (1 - xi_t))
-        # get terms in case of liquidity
-        H_next_liq =  H_star * self.expectation(R_q**(1 - self.gamma))
-        # get terms in case of illiquidity
-        H_next_illiq = self.expectation(R_q**(1 - self.gamma)* H_func(xi_next))
-            
-        H_t = util* self.dt + self.delta *(self.p * H_next_liq + (1 - self.p) *H_next_illiq)
-        
-        # Create a lambda function that binds dZ to the objective function
-        objective_with_dZ = lambda theta_t, c_t: objective(theta_t, c_t, dZ)
-        # Optimization over theta_t and c_t (could be done using scipy.optimize or any optimizer)
-        'TODO: Write the optimizer'
-        H_t, optimal_theta_t, optimal_c_t = self.optimize(objective_with_dZ)
-        return H_t, optimal_theta_t, optimal_c_t
-
     
-    def optimize(self):
-        #, objective
-        """Optimize the Bellman equation (dummy implementation for illustration)."""
-        # TODO 
-        # In practice, use scipy.optimize or other methods to find the optimal theta_t and c_t.
-        # This is a placeholder function.
-        H_str = 100
-        theta_t_opt =.2*np.ones(self.mu_w.shape[0]) # Dummy equal weighting
-        c_t_opt = 0.02  # Dummy consumption rate
-        return H_str, theta_t_opt, c_t_opt
-    '''
-    def solve(self, xi_0, H_func, H_star):
-        """Solve the dynamic problem."""
-        xi_t = xi_0
-        for t in range(100):  # Number of time steps (this is an example, adjust as needed)
-            optimal_theta_t, optimal_c_t = self.bellman_equation(xi_t, H_func, H_star)
-            # Update state based on the dynamics
-            _, _, _, xi_t = self.simulate_growth(optimal_theta_t, optimal_c_t, xi_t, np.random.normal(size=(self.N-1,)))
-            print(f"At time {t}, xi_t = {xi_t}, optimal_c_t = {optimal_c_t}")
-    '''
+    def H_t_objective(self, xi_t, params):
+        theta_t, c_t = params[:-1], params[-1]
+        #get next period's dynamic
+        R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
+        'Calculate the terms in the Bellman equation'
+        util = self.utility(c_t * (1 - xi_t))         # get utility
+        H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.H_func(xi_next))          # get terms in case of illiquidity
+        H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
+
+        # Debugging: Print objective function value
+        print(f"ln(-H_t_val): {np.log(-H_t_val)}")
+
+        return H_t_val  
+
+    def bellman_equation(self, xi_t):
+        '''
+        optimize the Bellman equation in a given run.  
+        ----------
+        xi_t : Scalar. Current share of illiquid wealth.
+        H_func : Function. Spline interpolator function for the H function.
+
+        '''
+        #optimize the Bellman equation given a xi_t
+        objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
+        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c
+        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
+        result = minimize(objective, init_guess,method='L-BFGS-B') #, bounds=bounds
+        theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
+        
+        H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
+        return H_t_val_opt, theta_t_opt, c_t_opt
+    
+
+    def solve(self, tol=1e-6, max_iter=100):
+        # Store the optimal controls and value function
+        self.optimal_theta = np.zeros((max_iter, self.gridpoints_Xi, len(self.mu_w)))
+        self.optimal_consumption = np.zeros((max_iter, self.gridpoints_Xi))
+        H_t_vals_opt_k = np.zeros_like(self.Xi_t)
+        
+        for k in range(max_iter):
+            H_vals = np.zeros(self.gridpoints_Xi)
+            for j, xi_j in enumerate(self.Xi_t):
+                print(f'\n Current xi={xi_j}')
+                H_t_val_opt, theta_opt, c_opt = self.bellman_equation(xi_j)
+                # Update 
+                H_t_vals_opt_k[j] = H_t_val_opt
+                self.optimal_theta[k, j, :] = theta_opt
+                self.optimal_consumption[k, j] = c_opt
+            
+            # Compute the error between current and previous value functions
+            error = np.linalg.norm(np.log(self.H_func(self.Xi_t)) - np.log(H_t_vals_opt_k))
+            # Update. Fit a new cubic spline based on updated H values
+            self.H_func = UnivariateSpline(self.Xi_t, H_vals, s=0)
+            self.H_star = max(H_t_vals_opt_k)
+
+             # Print every 10th iteration
+            if k % 10 == 0:
+                print(f"Iteration {k}: Error = {error:.6f}")
+            if error < tol:
+                print(f"Converged in {k+1} iterations.")
+                break
+        else:
+            print("Failed to converge within the maximum iterations.")
+    
+
 # Example usage:
 # Define parameters
-mu = np.array([0.05, 0.06, 0.04])  # Example: two liquid assets and one illiquid asset
-Sigma = np.array([[0.1, 0.05, 0.02], [0.05, 0.15, 0.03], [0.02, 0.03, 0.07]])
-gamma = 2.0
-beta = 0.95
+mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
+Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
+gamma = 6.0
+beta = 0.03
 eta = 0.1
-r = 0.03
+r = 0.02
 dt = 0.01
-
-# Define the known H function
-H_func = lambda xi: xi**(1 - gamma)  # Example of H function
 
 # Initialize the model
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model.solve()
 
-# Dummy value for H_star (you should replace this with the actual value)
-H_star = 1.0
-
-# Initial value of xi
-xi_0 = 0.5
 
 # Solve the dynamic problem
-model.solve(xi_0, H_func, H_star)
+#model.solve(xi_0, H_func, H_star)
