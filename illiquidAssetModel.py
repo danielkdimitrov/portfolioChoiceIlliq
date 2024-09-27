@@ -32,6 +32,7 @@ class IlliquidAssetModel:
         self.mu_x = mu[-1]
         self.m = 10 #number of quadrature points 
         
+        self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
         self.sigma_w = self.sigma[:-1, :]
         self.sigma_x = self.sigma[-1, :]
@@ -45,6 +46,9 @@ class IlliquidAssetModel:
         # Trading probability
         self.p = self.trading_probability(eta)
         
+        # Merton solution 
+        self.pi_opt, self.c_opt, self.H = self.merton_solution()
+        
         # Generate quadrature points and weights
         self.xn, self.Wn = self.generate_quadrature_points()
         
@@ -52,10 +56,35 @@ class IlliquidAssetModel:
         self.gridpoints_Xi = 20
         self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
         
-        # initialize
-        self.H_t_vals_opt  =  self.utility(.1*self.Xi_t)
-        self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt, s=0)
-        self.H_star = max(self.H_t_vals_opt)
+        
+    def merton_solution(self):
+        """
+        Provides the closed-form solution for the Merton optimal allocation and consumption.
+        
+        Returns
+        -------
+        pi_opt : array
+            Optimal investment allocation vector.
+        c_opt : float
+            Optimal consumption.
+        lambda_ : array
+            Market price of risk.
+        """
+        # Compute the market price of risk: lambda = sigma^{-1} (mu - r1)
+        mu_minus_r = self.mu - self.r * np.ones(len(self.mu))
+        lambda_ = np.linalg.solve(self.sigma, mu_minus_r)
+        
+        # Optimal portfolio allocation: pi = (1 / gamma) * Sigma^{-1} * (mu - r1)
+        pi_opt = (1 / self.gamma) * np.linalg.inv(self.Sigma) @ mu_minus_r
+                
+        # Optimal consumption: c = (beta + r(gamma - 1)) / gamma + 0.5 * (gamma - 1) / gamma^2 * ||lambda||^2
+        c_opt = (self.beta + self.r * (self.gamma - 1)) / self.gamma + 0.5 * (self.gamma - 1) / (self.gamma**2) * np.dot(lambda_, lambda_)
+        
+        # Get the reduced value scalar for Merton 
+        H = (1/(1-self.gamma))*(1/c_opt)**self.gamma
+        
+        return pi_opt, c_opt, H        
+        
     def trading_probability(self, eta):
         """
         Computes the trading probability p given the parameter eta and the time increment dt.
@@ -163,7 +192,13 @@ class IlliquidAssetModel:
         # Store the optimal controls and value function
         self.optimal_theta = np.zeros((max_iter, self.gridpoints_Xi, len(self.mu_w)))
         self.optimal_consumption = np.zeros((max_iter, self.gridpoints_Xi))
-        H_t_vals_opt_k = np.zeros_like(self.Xi_t)
+        
+        # initialize with the Merton solution
+        H_t_vals_opt =  self.H *np.ones_like(self.Xi_t) 
+        H_t_vals_opt_k = np.zeros_like(H_t_vals_opt) #the new points
+        H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt, s=0)
+        H_star = H_t_vals_opt[0]
+
         
         for k in range(max_iter):
             H_vals = np.zeros(self.gridpoints_Xi)
