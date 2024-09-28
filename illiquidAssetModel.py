@@ -4,7 +4,7 @@ import itertools
 from scipy.linalg import cholesky
 from scipy.interpolate import UnivariateSpline
 from scipy.optimize import minimize, minimize_scalar
-
+import matplotlib.pyplot as plt  
 
 class IlliquidAssetModel:
     def __init__(self, mu, Sigma, gamma, beta, eta, r, dt):
@@ -39,6 +39,7 @@ class IlliquidAssetModel:
         self.r = r  # Risk-free rate
         
         # Utility model
+        self.beta = beta
         self.gamma = gamma  # Risk aversion coefficient
         self.delta = np.exp(-beta * dt)  # Discount factor
         self.dt = dt  # Time increment
@@ -47,7 +48,7 @@ class IlliquidAssetModel:
         self.p = self.trading_probability(eta)
         
         # Merton solution 
-        self.pi_opt, self.c_opt, self.H = self.merton_solution()
+        self.pi_m, self.c_m, self.H_m = self.merton_solution()
         
         # Generate quadrature points and weights
         self.xn, self.Wn = self.generate_quadrature_points()
@@ -99,11 +100,13 @@ class IlliquidAssetModel:
     
     def utility(self, c):
         """CRRA utility function."""
-        if self.gamma == 1:
+        if c <= 0:
+            return -np.inf  # Penalize zero or negative consumption
+        elif self.gamma == 1:
             return np.log(c)
         else:
-            return c**(1 - self.gamma) / (1 - self.gamma)
-    
+            return c**(1 - self.gamma) / (1 - self.gamma)    
+        
     def generate_quadrature_points(self):
         """
         Generate quadrature points and weights for multivariate integration.
@@ -165,7 +168,8 @@ class IlliquidAssetModel:
         H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
 
         # Debugging: Print objective function value
-        print(f"ln(-H_t_val): {np.log(-H_t_val)}")
+        #print(f"try c_t: {c_t}")
+        #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
 
         return H_t_val  
 
@@ -181,8 +185,10 @@ class IlliquidAssetModel:
         objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
         init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
-        result = minimize(objective, init_guess,method='L-BFGS-B') #, bounds=bounds
+        result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
+        
+        print(f"Optimization converging?: {result.success}")
         
         H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
         return H_t_val_opt, theta_t_opt, c_t_opt
@@ -193,29 +199,30 @@ class IlliquidAssetModel:
         self.optimal_theta = np.zeros((max_iter, self.gridpoints_Xi, len(self.mu_w)))
         self.optimal_consumption = np.zeros((max_iter, self.gridpoints_Xi))
         
-        # initialize with the Merton solution
-        H_t_vals_opt =  self.H *np.ones_like(self.Xi_t) 
-        H_t_vals_opt_k = np.zeros_like(H_t_vals_opt) #the new points
-        H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt, s=0)
-        H_star = H_t_vals_opt[0]
+        # initialize with the Merton solutions
+        H_t_vals_opt_k =  self.H_m *np.ones_like(self.Xi_t) 
+        #H_t_vals_opt_k = np.zeros_like(H_t_vals_opt) #the new points
+        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+        self.H_star = H_t_vals_opt_k[0]
 
         
         for k in range(max_iter):
-            H_vals = np.zeros(self.gridpoints_Xi)
+            print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
-                print(f'\n Current xi={xi_j}')
+                print(f'Current xi={xi_j}')
                 H_t_val_opt, theta_opt, c_opt = self.bellman_equation(xi_j)
                 # Update 
                 H_t_vals_opt_k[j] = H_t_val_opt
-                self.optimal_theta[k, j, :] = theta_opt
-                self.optimal_consumption[k, j] = c_opt
+                #self.optimal_theta[k, j, :] = theta_opt
+                #self.optimal_consumption[k, j] = c_opt
             
+            #plot the new value function
+            plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
             # Compute the error between current and previous value functions
-            error = np.linalg.norm(np.log(self.H_func(self.Xi_t)) - np.log(H_t_vals_opt_k))
+            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
             # Update. Fit a new cubic spline based on updated H values
-            self.H_func = UnivariateSpline(self.Xi_t, H_vals, s=0)
+            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
             self.H_star = max(H_t_vals_opt_k)
-
              # Print every 10th iteration
             if k % 10 == 0:
                 print(f"Iteration {k}: Error = {error:.6f}")
@@ -234,7 +241,7 @@ gamma = 6.0
 beta = 0.03
 eta = 0.1
 r = 0.02
-dt = 0.01
+dt = 1.
 
 # Initialize the model
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
