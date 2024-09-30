@@ -57,7 +57,6 @@ class IlliquidAssetModel:
         self.gridpoints_Xi = 20
         self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
         
-        
     def merton_solution(self):
         """
         Provides the closed-form solution for the Merton optimal allocation and consumption.
@@ -183,8 +182,8 @@ class IlliquidAssetModel:
         '''
         #optimize the Bellman equation given a xi_t
         objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
-        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
+        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
         result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         if result.success == False: print(f"Optimization convergence: {result.success}")
@@ -204,27 +203,30 @@ class IlliquidAssetModel:
         self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
         self.H_star = H_t_vals_opt_k[0]
 
-        
+        # enable interactive mode
+        plt.ion()
+        axs = None  # initialize axis
         for k in range(max_iter):
-            print(f'\n ----- Iteration k={k} ---------------')
+            #print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
                 #print(f'Current xi={xi_j}')
                 H_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
                 # Update 
                 H_t_vals_opt_k[j] = H_t_val_opt
+                #self.init_guess = np.array((self.theta_opt[j, :][0], self.c_opt[j]))
             
             # Compute the error between current and previous value functions
             error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
             # Update. Fit a new cubic spline based on updated H values
             self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-            self.H_star = max(H_t_vals_opt_k)
+            self.H_star = max(self.H_func(np.linspace(.001, .99, 250)))
              # Print every k-th iteration
             if k % 1 == 0:
                 print(f"Iteration {k}: Error = {error:.6f}")
                 #plot the new value function
                 #plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
                 #plt.plot(self.Xi_t, self.theta_opt)
-                self.plot_results(H_t_vals_opt_k)
+                axs = self.plot_results(H_t_vals_opt_k, axs)
 
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
@@ -233,7 +235,7 @@ class IlliquidAssetModel:
             print("Failed to converge within the maximum iterations.")
             
             
-    def plot_results(self, H_t_vals_opt_k):
+    def plot_results(self, H_t_vals_opt_k, axs=None):
         """
         Plot value function, optimal consumption, and optimal portfolio weights.
         """
@@ -243,11 +245,11 @@ class IlliquidAssetModel:
             fig, axs = plt.subplots(3, 1, figsize=(8, 12))  # 3 rows, 1 column
 
         # Clear previous data before plotting new ones in the same loop
-        axs[0].cla()
-        axs[1].cla()
-        axs[2].cla()
+        #axs[0].cla()
+        #axs[1].cla()
+        #axs[2].cla()
 
-	# Plot log(-H_t_vals_opt_k) in the first subplot
+    	# Plot log(-H_t_vals_opt_k) in the first subplot
         axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
         axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
         axs[0].set_xlabel("xi_t")
@@ -265,19 +267,14 @@ class IlliquidAssetModel:
             axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
             axs[2].set_xlabel("xi_t")
             axs[2].set_ylabel("theta_t")
-            axs[2].legend()
-	
-	# Add legends if necessary
-        for ax in axs:
-            ax.legend()
-	    
-	# Adjust layout
+		    
+    	# Adjust layout
         plt.tight_layout()
-
+    
         # Pause briefly to update the plot in interactive mode
-        plt.pause(0.01)
-	# Show the plot
-        #plt.show()
+        #plt.pause(0.01)
+    	# Show the plot
+            #plt.show()
 
 # Example usage:
 # Define parameters
