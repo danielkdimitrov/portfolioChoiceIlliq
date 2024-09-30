@@ -187,8 +187,7 @@ class IlliquidAssetModel:
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
         result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
-        
-        print(f"Optimization converging?: {result.success}")
+        if result.success == False: print(f"Optimization convergence: {result.success}")
         
         H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
         return H_t_val_opt, theta_t_opt, c_t_opt
@@ -196,8 +195,8 @@ class IlliquidAssetModel:
 
     def solve(self, tol=1e-6, max_iter=100):
         # Store the optimal controls and value function
-        self.optimal_theta = np.zeros((max_iter, self.gridpoints_Xi, len(self.mu_w)))
-        self.optimal_consumption = np.zeros((max_iter, self.gridpoints_Xi))
+        self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
+        self.c_opt = np.zeros(self.gridpoints_Xi)
         
         # initialize with the Merton solutions
         H_t_vals_opt_k =  self.H_m *np.ones_like(self.Xi_t) 
@@ -209,28 +208,59 @@ class IlliquidAssetModel:
         for k in range(max_iter):
             print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
-                print(f'Current xi={xi_j}')
-                H_t_val_opt, theta_opt, c_opt = self.bellman_equation(xi_j)
+                #print(f'Current xi={xi_j}')
+                H_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
                 # Update 
                 H_t_vals_opt_k[j] = H_t_val_opt
-                #self.optimal_theta[k, j, :] = theta_opt
-                #self.optimal_consumption[k, j] = c_opt
             
-            #plot the new value function
-            plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
             # Compute the error between current and previous value functions
             error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
             # Update. Fit a new cubic spline based on updated H values
             self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
             self.H_star = max(H_t_vals_opt_k)
-             # Print every 10th iteration
-            if k % 10 == 0:
+             # Print every k-th iteration
+            if k % 1 == 0:
                 print(f"Iteration {k}: Error = {error:.6f}")
+                #plot the new value function
+                #plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
+                #plt.plot(self.Xi_t, self.theta_opt)
+                self.plot_results(H_t_vals_opt_k)
+
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
                 break
         else:
             print("Failed to converge within the maximum iterations.")
+            
+            
+    def plot_results(self, H_t_vals_opt_k):
+        """
+        Plot value function, optimal consumption, and optimal portfolio weights.
+        """
+        # Set up a 3x1 subplot grid
+        fig, axs = plt.subplots(3, 1, figsize=(8, 12))# 3 rows, 1 column
+        # Plot log(-H_t_vals_opt_k) in the first subplot
+        axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
+        axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
+        axs[0].set_xlabel("xi_t")
+        axs[0].set_ylabel("log(-H)")
+        # Plot consumption (c_opt) in the second subplot
+        axs[1].plot(self.Xi_t, self.c_opt)
+        axs[1].set_title("Optimal Consumption (c_opt)")
+        axs[1].set_xlabel("xi_t")
+        axs[1].set_ylabel("Consumption (c_t)")
+        # Plot theta_opt in the third subplot (can be multiple lines if self.theta_opt has multiple dimensions)
+        for i in range(self.theta_opt.shape[1]):
+            axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")
+            axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
+            axs[2].set_xlabel("xi_t")
+            axs[2].set_ylabel("theta_t")
+            axs[2].legend()
+		# Adjust layout
+        plt.tight_layout()
+        # Show the plot
+        plt.show()
+
     
 
 # Example usage:
