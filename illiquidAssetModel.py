@@ -237,18 +237,28 @@ class IlliquidAssetModel:
         """
         Plot value function, optimal consumption, and optimal portfolio weights.
         """
-        # Set up a 3x1 subplot grid
-        fig, axs = plt.subplots(3, 1, figsize=(8, 12))# 3 rows, 1 column
-        # Plot log(-H_t_vals_opt_k) in the first subplot
+        
+        if axs is None:
+            # Initialize a 3x1 subplot grid only once
+            fig, axs = plt.subplots(3, 1, figsize=(8, 12))  # 3 rows, 1 column
+
+        # Clear previous data before plotting new ones in the same loop
+        axs[0].cla()
+        axs[1].cla()
+        axs[2].cla()
+
+	# Plot log(-H_t_vals_opt_k) in the first subplot
         axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
         axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
         axs[0].set_xlabel("xi_t")
         axs[0].set_ylabel("log(-H)")
+	    
         # Plot consumption (c_opt) in the second subplot
         axs[1].plot(self.Xi_t, self.c_opt)
         axs[1].set_title("Optimal Consumption (c_opt)")
         axs[1].set_xlabel("xi_t")
         axs[1].set_ylabel("Consumption (c_t)")
+	    
         # Plot theta_opt in the third subplot (can be multiple lines if self.theta_opt has multiple dimensions)
         for i in range(self.theta_opt.shape[1]):
             axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")
@@ -256,12 +266,18 @@ class IlliquidAssetModel:
             axs[2].set_xlabel("xi_t")
             axs[2].set_ylabel("theta_t")
             axs[2].legend()
-		# Adjust layout
+	
+	# Add legends if necessary
+        for ax in axs:
+            ax.legend()
+	    
+	# Adjust layout
         plt.tight_layout()
-        # Show the plot
-        plt.show()
 
-    
+        # Pause briefly to update the plot in interactive mode
+        plt.pause(0.01)
+	# Show the plot
+        #plt.show()
 
 # Example usage:
 # Define parameters
