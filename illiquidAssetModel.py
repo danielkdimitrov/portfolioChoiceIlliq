@@ -165,12 +165,39 @@ class IlliquidAssetModel:
         H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
         H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.H_func(xi_next))          # get terms in case of illiquidity
         H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
-
+        #print(xi_next[xi_next>=1])
         # Debugging: Print objective function value
         #print(f"try c_t: {c_t}")
         #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
 
         return H_t_val  
+
+    def h_t_objective(self, xi_t, params):
+        '''
+        Returns the log-transform of the value function such that 
+        h(xi) = np.log(-H(xi))  <=>  H(xi) = -np.exp(h(xi))
+        '''
+        
+        theta_t, c_t = params[:-1], params[-1]
+        #get next period's dynamic
+        R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
+        'Calculate the terms in the Bellman equation'
+        util = self.utility(c_t * (1 - xi_t))         # get utility
+        'Und to log transformation of the value function'
+        H_star = -np.exp(self.h_star)
+        H_illiq = -np.exp(self.h_func(xi_next))
+        'Get next period bellman value'
+        RHS_liq = H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
+        RHS_illiq = self.expectation(R_q**(1 - self.gamma) * H_illiq)          # get terms in case of illiquidity
+        H_t_val = util * self.dt + self.delta * (self.p * RHS_liq + (1 - self.p) * RHS_illiq)
+        'Log-tranform again the value function'
+        h_t_val = np.log(-H_t_val)
+        print(f'Try theta={theta_t} and c={c_t}, get h={h_t_val}')        
+        #print(xi_next[xi_next>=1])
+        # Debugging: Print objective function value
+        #print(f"try c_t: {c_t}")
+        #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
+        return h_t_val  
 
     def bellman_equation(self, xi_t):
         '''
@@ -181,52 +208,54 @@ class IlliquidAssetModel:
 
         '''
         #optimize the Bellman equation given a xi_t
-        objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
+        objective = lambda params: -self.h_t_objective(xi_t, params) # Minimize negative of value function (for optimization)
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
-        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
+        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.03*(1-xi_t))  # Initial guess for theta and c        
         result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         if result.success == False: print(f"Optimization convergence: {result.success}")
         
-        H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
-        return H_t_val_opt, theta_t_opt, c_t_opt
-    
-
-    def solve(self, tol=1e-6, max_iter=100):
+        h_t_val_opt = -result.fun  # Get the maximum value of the function (negative of objective)
+        print(f'h^* =: {h_t_val_opt}')
+        return h_t_val_opt, theta_t_opt, c_t_opt
+        
+    def solve(self, tol=1e-6, max_iter=250):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
         
         # initialize with the Merton solutions
-        H_t_vals_opt_k =  self.H_m *np.ones_like(self.Xi_t) 
+        h_t_vals_opt_k =  np.log(-self.H_m) *np.ones_like(self.Xi_t) 
         #H_t_vals_opt_k = np.zeros_like(H_t_vals_opt) #the new points
-        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-        self.H_star = H_t_vals_opt_k[0]
+        self.h_func = UnivariateSpline(self.Xi_t, h_t_vals_opt_k, s=0)
+        self.h_star = h_t_vals_opt_k[0]
 
         # enable interactive mode
-        plt.ion()
+        #plt.ion()
         axs = None  # initialize axis
         for k in range(max_iter):
             #print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
                 #print(f'Current xi={xi_j}')
-                H_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
+                h_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
                 # Update 
-                H_t_vals_opt_k[j] = H_t_val_opt
+                h_t_vals_opt_k[j] = h_t_val_opt
                 #self.init_guess = np.array((self.theta_opt[j, :][0], self.c_opt[j]))
             
             # Compute the error between current and previous value functions
-            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
+            error = np.linalg.norm(self.h_func(self.Xi_t) - h_t_vals_opt_k)
             # Update. Fit a new cubic spline based on updated H values
-            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-            self.H_star = max(self.H_func(np.linspace(.001, .99, 250)))
+            #self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+            'Update the fitted value function'
+            self.h_func = UnivariateSpline(self.Xi_t, h_t_vals_opt_k, s=0)
+            self.h_star = max(self.h_func(np.linspace(.001, .99, 250)))
              # Print every k-th iteration
             if k % 1 == 0:
                 print(f"Iteration {k}: Error = {error:.6f}")
                 #plot the new value function
                 #plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
                 #plt.plot(self.Xi_t, self.theta_opt)
-                axs = self.plot_results(H_t_vals_opt_k, axs)
+                axs = self.plot_results(axs)
 
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
@@ -235,7 +264,7 @@ class IlliquidAssetModel:
             print("Failed to converge within the maximum iterations.")
             
             
-    def plot_results(self, H_t_vals_opt_k, axs=None):
+    def plot_results(self, axs=None):
         """
         Plot value function, optimal consumption, and optimal portfolio weights.
         """
@@ -250,7 +279,7 @@ class IlliquidAssetModel:
         #axs[2].cla()
 
     	# Plot log(-H_t_vals_opt_k) in the first subplot
-        axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
+        axs[0].plot(self.Xi_t, self.h_func(self.Xi_t))
         axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
         axs[0].set_xlabel("xi_t")
         axs[0].set_ylabel("log(-H)")
@@ -282,7 +311,7 @@ mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid ass
 Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
 gamma = 6.0
 beta = 0.03
-eta = 0.1
+eta = 1/10
 r = 0.02
 dt = 1.
 
