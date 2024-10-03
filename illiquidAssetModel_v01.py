@@ -165,39 +165,12 @@ class IlliquidAssetModel:
         H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
         H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.H_func(xi_next))          # get terms in case of illiquidity
         H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
-        #print(xi_next[xi_next>=1])
+
         # Debugging: Print objective function value
         #print(f"try c_t: {c_t}")
         #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
 
         return H_t_val  
-
-    def h_t_objective(self, xi_t, params):
-        '''
-        Returns the log-transform of the value function such that 
-        h(xi) = np.log(-H(xi))  <=>  H(xi) = -np.exp(h(xi))
-        '''
-        
-        theta_t, c_t = params[:-1], params[-1]
-        #get next period's dynamic
-        R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
-        'Calculate the terms in the Bellman equation'
-        util = self.utility(c_t * (1 - xi_t))         # get utility
-        'Und to log transformation of the value function'
-        H_star = -np.exp(self.h_star)
-        H_illiq = -np.exp(self.h_func(xi_next))
-        'Get next period bellman value'
-        RHS_liq = H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
-        RHS_illiq = self.expectation(R_q**(1 - self.gamma) * H_illiq)          # get terms in case of illiquidity
-        H_t_val = util * self.dt + self.delta * (self.p * RHS_liq + (1 - self.p) * RHS_illiq)
-        'Log-tranform again the value function'
-        h_t_val = np.log(-H_t_val)
-        print(f'Try theta={theta_t} and c={c_t}, get h={h_t_val}')        
-        #print(xi_next[xi_next>=1])
-        # Debugging: Print objective function value
-        #print(f"try c_t: {c_t}")
-        #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
-        return h_t_val  
 
     def bellman_equation(self, xi_t):
         '''
@@ -208,111 +181,113 @@ class IlliquidAssetModel:
 
         '''
         #optimize the Bellman equation given a xi_t
-        objective = lambda params: -np.log(self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
+        objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
-        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.03*(1-xi_t))  # Initial guess for theta and c
-        bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(1e-4, 1)]  # Prevent consumption from being zero
-        result = minimize(objective, init_guess, method='L-BFGS-B', bounds=bounds)
+        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
+        result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         if result.success == False: print(f"Optimization convergence: {result.success}")
         
-        H_t_val_opt = -np.exp(-result.fun)  # Get the maximum value of the function (negative of objective)
-        print(f'h^* =: {H_t_val_opt}')
+        H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
         return H_t_val_opt, theta_t_opt, c_t_opt
+
+    def plot_results(self, H_t_vals_opt_k, axs=None, lines=None, iteration=None):
+        """
+        Update the value function, optimal consumption, and portfolio weights in the same plot.
+        The behavior is equivalent to MATLAB's 'hold on'.
+        """
+        if axs is None:  # Initialize subplots only once
+            fig, axs = plt.subplots(3, 1, figsize=(8, 12))
+            
+            # Create empty line objects that will be updated
+            lines = {
+                'H_t_vals': axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k), label="log(-H)")[0],
+                'c_opt': axs[1].plot(self.Xi_t, self.c_opt, label="c_opt")[0],
+                'theta_opt': [axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")[0]
+                              for i in range(self.theta_opt.shape[1])]
+            }
+            
+            # Set titles and labels for subplots
+            axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
+            axs[0].set_xlabel("xi_t")
+            axs[0].set_ylabel("log(-H)")
+            
+            axs[1].set_title("Optimal Consumption (c_opt)")
+            axs[1].set_xlabel("xi_t")
+            axs[1].set_ylabel("Consumption (c_t)")
+            
+            axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
+            axs[2].set_xlabel("xi_t")
+            axs[2].set_ylabel("theta_t")
+            
+            # Add legends to all subplots
+            for ax in axs:
+                ax.legend()
+            
+            # Adjust layout for better visualization
+            plt.tight_layout()
         
-    def solve(self, tol=1e-6, max_iter=250):
+        else:
+            # Update the y-data of the existing lines without creating new plots
+            lines['H_t_vals'].set_ydata(-np.log(-H_t_vals_opt_k))
+            lines['c_opt'].set_ydata(self.c_opt)
+            for i, line in enumerate(lines['theta_opt']):
+                line.set_ydata(self.theta_opt[:, i])
+        
+        # Redraw the figure to reflect updates
+        plt.draw()
+        plt.pause(0.01)  # Pause to ensure the plot is updated
+        
+        return axs, lines  # Return updated axes and line objects
+    
+    def solve(self, tol=1e-6, max_iter=500):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
+    
+        # Initialize with the Merton solutions
+        H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
+        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+        self.H_star = H_t_vals_opt_k[0]
+    
+        # Enable interactive mode for live plotting
+        plt.ion()
+        axs = None  # Initialize axis object
+        lines = None  # Initialize line objects
         
-        # initialize with the Merton solutions
-        h_t_vals_opt_k =  np.log(-self.H_m) *np.ones_like(self.Xi_t) 
-        #H_t_vals_opt_k = np.zeros_like(H_t_vals_opt) #the new points
-        self.h_func = UnivariateSpline(self.Xi_t, h_t_vals_opt_k, s=0)
-        self.h_star = h_t_vals_opt_k[0]
-
-        # enable interactive mode
-        #plt.ion()
-        axs = None  # initialize axis
         for k in range(max_iter):
-            #print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
-                #print(f'Current xi={xi_j}')
-                h_t_val_opt, self.theta_opt[:,j], self.c_opt[j] = self.bellman_equation(xi_j)
-                # Update 
-                h_t_vals_opt_k[j] = h_t_val_opt
-                #self.init_guess = np.array((self.theta_opt[j, :][0], self.c_opt[j]))
-            
+                H_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
+                H_t_vals_opt_k[j] = H_t_val_opt
+    
             # Compute the error between current and previous value functions
-            error = np.linalg.norm(self.h_func(self.Xi_t) - h_t_vals_opt_k)
-            # Update. Fit a new cubic spline based on updated H values
-            #self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-            'Update the fitted value function'
-            self.h_func = UnivariateSpline(self.Xi_t, h_t_vals_opt_k, s=0)
-            self.h_star = max(self.h_func(np.linspace(.001, .99, 250)))
-             # Print every k-th iteration
-            if k % 1 == 0:
-                print(f"Iteration {k}: Error = {error:.6f}")
-                #plot the new value function
-                #plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))
-                #plt.plot(self.Xi_t, self.theta_opt)
-                axs = self.plot_results(axs)
-
+            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
+            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+            self.H_star = max(self.H_func(np.linspace(.001, .99, 250)))
+    
+            # Print every k-th iteration
+            if k % 10 == 0:
+                print(f"Iteration {k}: Value Fn Diff = {error:.6f}")
+                #axs, lines = self.plot_results(H_t_vals_opt_k, axs, lines, iteration=k)
+    
+            # Stop if the error is below the tolerance
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
                 break
         else:
             print("Failed to converge within the maximum iterations.")
-            
-            
-    def plot_results(self, axs=None):
-        """
-        Plot value function, optimal consumption, and optimal portfolio weights.
-        """
-        
-        if axs is None:
-            # Initialize a 3x1 subplot grid only once
-            fig, axs = plt.subplots(3, 1, figsize=(8, 12))  # 3 rows, 1 column
-
-        # Clear previous data before plotting new ones in the same loop
-        #axs[0].cla()
-        #axs[1].cla()
-        #axs[2].cla()
-
-    	# Plot log(-H_t_vals_opt_k) in the first subplot
-        axs[0].plot(self.Xi_t, -self.h_func(self.Xi_t))
-        axs[0].set_title("Value Function: -log(-H_t_vals_opt_k)")
-        axs[0].set_xlabel("xi_t")
-        axs[0].set_ylabel("log(-H)")
-	    
-        # Plot consumption (c_opt) in the second subplot
-        axs[1].plot(self.Xi_t, self.c_opt)
-        axs[1].set_title("Optimal Consumption (c_opt)")
-        axs[1].set_xlabel("xi_t")
-        axs[1].set_ylabel("Consumption (c_t)")
-	    
-        # Plot theta_opt in the third subplot (can be multiple lines if self.theta_opt has multiple dimensions)
-        for i in range(self.theta_opt.shape[1]):
-            axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")
-            axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
-            axs[2].set_xlabel("xi_t")
-            axs[2].set_ylabel("theta_t")
-		    
-    	# Adjust layout
-        plt.tight_layout()
     
-        # Pause briefly to update the plot in interactive mode
-        #plt.pause(0.01)
-    	# Show the plot
-            #plt.show()
-
-# Example usage:
+        # Keep the plot open after convergence
+        plt.ioff()
+        plt.show()
+        
+    # Example usage:
 # Define parameters
 mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
 Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
 gamma = 6.0
 beta = 0.03
-eta = 1/10
+eta = 1/12
 r = 0.02
 dt = 1.
 
@@ -320,6 +295,16 @@ dt = 1.
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model.solve()
 
+# Evaluate the H_func over the grid Xi_t
+H_vals_on_grid = model.H_func(model.Xi_t)
 
+# Find the index where H_func equals H_star (or is closest to it)
+index_of_H_star = np.argmax(H_vals_on_grid)
+
+# Corresponding Xi_t value
+xi_star = model.Xi_t[index_of_H_star]
+
+print(f"The value of xi_t corresponding to H_star is: {xi_star}")
+model.plot_results(H_vals_on_grid)
 # Solve the dynamic problem
 #model.solve(xi_0, H_func, H_star)
