@@ -208,7 +208,7 @@ class IlliquidAssetModel:
 
         '''
         #optimize the Bellman equation given a xi_t
-        objective = lambda params: -np.log(self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
+        objective = lambda params: self.h_t_objective(xi_t, params) # Minimize negative of value function (for optimization)
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
         init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.03*(1-xi_t))  # Initial guess for theta and c
         bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(1e-4, 1)]  # Prevent consumption from being zero
@@ -238,7 +238,7 @@ class IlliquidAssetModel:
             #print(f'\n ----- Iteration k={k} ---------------')
             for j, xi_j in enumerate(self.Xi_t):
                 #print(f'Current xi={xi_j}')
-                h_t_val_opt, self.theta_opt[:,j], self.c_opt[j] = self.bellman_equation(xi_j)
+                h_t_val_opt, self.theta_opt[j,:], self.c_opt[j] = self.bellman_equation(xi_j)
                 # Update 
                 h_t_vals_opt_k[j] = h_t_val_opt
                 #self.init_guess = np.array((self.theta_opt[j, :][0], self.c_opt[j]))
@@ -251,7 +251,7 @@ class IlliquidAssetModel:
             self.h_func = UnivariateSpline(self.Xi_t, h_t_vals_opt_k, s=0)
             self.h_star = max(self.h_func(np.linspace(.001, .99, 250)))
              # Print every k-th iteration
-            if k % 1 == 0:
+            if k % 10 == 0:
                 print(f"Iteration {k}: Error = {error:.6f}")
                 #plot the new value function
                 #plt.plot(self.Xi_t, -np.log(-H_t_vals_opt_k))

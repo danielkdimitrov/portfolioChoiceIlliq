@@ -183,13 +183,70 @@ class IlliquidAssetModel:
         #optimize the Bellman equation given a xi_t
         objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
-        init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, init_guess,method='Nelder-Mead') #, bounds=bounds
+        #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
+        result = minimize(objective, self.init_guess,method='Nelder-Mead') #, bounds=bounds
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         if result.success == False: print(f"Optimization convergence: {result.success}")
         
         H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
         return H_t_val_opt, theta_t_opt, c_t_opt
+    
+    def getH_str(self):
+        xi_fine_grid = np.linspace(.01, .99, 500)
+        H_grid = self.H_func(xi_fine_grid)
+        H_star = max(H_grid)
+        xi_star = xi_fine_grid[np.argmax(H_grid)]
+        return xi_star, H_star
+
+
+    def solve(self, tol=1e-6, max_iter=500):
+        # Store the optimal controls and value function
+        self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
+        self.c_opt = np.zeros(self.gridpoints_Xi)
+    
+        # Initialize with the Merton solutions
+        H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
+        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+        self.H_star = H_t_vals_opt_k[0]
+    
+        # Enable interactive mode for live plotting
+        plt.ion()
+        axs = None  # Initialize axis object
+        lines = None  # Initialize line objects
+        
+        for k in range(max_iter):
+            self.init_guess = np.append(0.2*(1-.01)* np.ones(self.mu_w.shape[0]), 0.02*(1-.01))  # Initial guess for theta and c        
+            for j, xi_j in enumerate(self.Xi_t):
+                H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
+                self.init_guess = np.append(self.theta_opt[j, :], self.c_opt[j])  # Initial guess for theta and c        
+    
+            # Compute the error between current and previous value functions
+            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
+            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+            'get H_str and xi_str'
+            self.xi_star, self.H_star = self.getH_str()
+
+            if k == 309:
+                print('is nan!')
+    
+            # Print every k-th iteration
+            if k % 10 == 0:
+                print(f"Iteration {k}: ")
+                print(f"               Value Fn Diff = {error:.6f}")
+                print(f"               -ln(-H*) = {-np.log(-self.H_star):.4f}")
+                print(f"               xi* = {self.xi_star:.4f}")
+                axs, lines = self.plot_results(H_t_vals_opt_k, axs, lines, iteration=k)
+    
+            # Stop if the error is below the tolerance
+            if error < tol:
+                print(f"Converged in {k+1} iterations.")
+                break
+        else:
+            print("Failed to converge within the maximum iterations.")
+    
+        # Keep the plot open after convergence
+        plt.ioff()
+        plt.show()
 
     def plot_results(self, H_t_vals_opt_k, axs=None, lines=None, iteration=None):
         """
@@ -240,46 +297,6 @@ class IlliquidAssetModel:
         
         return axs, lines  # Return updated axes and line objects
     
-    def solve(self, tol=1e-6, max_iter=500):
-        # Store the optimal controls and value function
-        self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
-        self.c_opt = np.zeros(self.gridpoints_Xi)
-    
-        # Initialize with the Merton solutions
-        H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
-        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-        self.H_star = H_t_vals_opt_k[0]
-    
-        # Enable interactive mode for live plotting
-        plt.ion()
-        axs = None  # Initialize axis object
-        lines = None  # Initialize line objects
-        
-        for k in range(max_iter):
-            for j, xi_j in enumerate(self.Xi_t):
-                H_t_val_opt, self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
-                H_t_vals_opt_k[j] = H_t_val_opt
-    
-            # Compute the error between current and previous value functions
-            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
-            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-            self.H_star = max(self.H_func(np.linspace(.001, .99, 250)))
-    
-            # Print every k-th iteration
-            if k % 10 == 0:
-                print(f"Iteration {k}: Value Fn Diff = {error:.6f}")
-                #axs, lines = self.plot_results(H_t_vals_opt_k, axs, lines, iteration=k)
-    
-            # Stop if the error is below the tolerance
-            if error < tol:
-                print(f"Converged in {k+1} iterations.")
-                break
-        else:
-            print("Failed to converge within the maximum iterations.")
-    
-        # Keep the plot open after convergence
-        plt.ioff()
-        plt.show()
         
     # Example usage:
 # Define parameters
