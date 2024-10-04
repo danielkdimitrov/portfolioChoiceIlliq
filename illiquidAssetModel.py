@@ -133,11 +133,16 @@ class IlliquidAssetModel:
         """
         H_vals = self.H_func(xi_next)
         
+        'TODO : add here -np.inf for xi > 1. Check if this works'
+        
+        mask = xi_next > 1. 
+        H_vals[mask] = -np.inf
+        
         return H_vals
     
     def wealth_growth(self, theta_t, c_t, xi_t):
         """
-        Evaluate the growth rates R_{w,t + \Delta t}, R_{x,t + \Delta t}, and R_{q,t + \Delta t}.
+        Evaluate the growth rates R_{w,t + Delta t}, R_{x,t + Delta t}, and R_{q,t + Delta t}.
         Note that we multiply by sqrt(2) to accomodate the quadrature transformation
         """
         dZ = self.xn*np.sqrt(2)
@@ -296,20 +301,20 @@ class IlliquidAssetModel:
         plt.pause(0.01)  # Pause to ensure the plot is updated
         
         return axs, lines  # Return updated axes and line objects
+
+if __name__ == "__main__":
+    # You can specify eta = 1 for one-year variables
     
-        
-# Define parameters
-mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
-Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
-gamma = 6.0
-beta = 0.03
-eta = 1/10
-r = 0.02
-dt = 1.
+    # Define parameters
+    mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
+    Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
+    gamma = 6.0
+    beta = 0.03
+    eta = 10
+    r = 0.02
+    dt = 1.
 
-# Initialize the model
-model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model.solve()
-
-print(f"xi_star: {model.xi_star}")
-model.plot_results()
+    # Run 1 Year model
+    model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+    model.solve()
+    model.plot()

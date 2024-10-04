@@ -1,0 +1,84 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Oct  4 19:03:33 2024
+
+@author: danie
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+import illiquidAssetModel
+
+
+# Define parameters
+mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
+Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
+gamma = 6.0
+beta = 0.03
+eta = 1
+r = 0.02
+dt = 1.
+
+# Run 1 Year model
+model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_1year.solve()
+
+print(f"xi_star: {model.xi_star}")
+model_1year.plot_results()
+
+# Run 10 Year model
+eta = 1/10
+
+model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_10year.solve()
+
+print(f"xi_star: {model.xi_star}")
+model_10year.plot_results()
+
+
+plot_value_function(model_1year, model_10year)
+
+# Function to plot panel (a) Value Function
+def plot_value_function(model_1year, model_10year):
+    # Extract H values
+    H_1year = -np.log(-model_1year.H_t_vals_opt_k)  # H for 1 year
+    H_10year = -np.log(-model_10year.H_t_vals_opt_k)  # H for 10 years
+    H_cont = -np.log(-model_1year.H_m)  # H continuous trading (use 1year as representative)
+    
+    # Create the ξ grid
+    xi_grid = model_1year.Xi_t
+
+    # Diamond values
+    xi_diamond_1Y = model_1year.xi_star
+    H_diamond_1Y = -np.log(-model_1year.H_star)
+
+    xi_diamond_10Y = model_10year.xi_star
+    H_diamond_10Y = -np.log(-model_10year.H_star)
+
+    # Plot
+    plt.figure(figsize=(5, 4))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, H_1year, 'b-', label='1 Year Friction')
+    
+    # Plot 10 year (dotted line)
+    plt.plot(xi_grid, H_10year, 'b:', label='10 Year Friction')
+    
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(H_cont, color='gray', linestyle='--', label='Continuous Trading')
+    
+    # Plot diamond point
+    plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
+    plt.plot(xi_diamond_10Y, H_diamond_10Y, 'D', color='purple')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$-\log(-H(\xi))$')
+    plt.title('Value Function')
+    plt.legend()
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# Assuming you already have the instances of the models created as model_1year and model_10year
+# plot_value_function(model_1year, model_10year)
