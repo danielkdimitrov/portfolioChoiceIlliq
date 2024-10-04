@@ -55,7 +55,7 @@ class IlliquidAssetModel:
         
         # Create a grid over xi
         self.gridpoints_Xi = 20
-        self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
+        self.Xi_t = np.linspace(0.01,.95, self.gridpoints_Xi)
         
     def merton_solution(self):
         """
@@ -125,6 +125,37 @@ class IlliquidAssetModel:
         # get z variable (transformed nodes stacked, transpose the vertor row) 
         
         return xn, Wn
+
+    def spline(self, xi_next):
+        """
+        Apply the spline normally for xi_next <= 0.99, and for xi_next > 0.99
+        apply a smooth penalty that decays towards negative infinity.
+        """
+        H_vals = self.H_func(xi_next)
+        '''
+        # Define the threshold for applying the penalty
+        threshold = max(self.Xi_t)
+        
+        # Apply the penalty for xi_next > threshold
+        if np.any(xi_next > threshold):
+            mask = xi_next > threshold
+            # Adjust this value to control the steepness of the penalty
+            # Smooth penalty using an exponential decay for xi_next > 0.99
+            
+            penalty = 1.1* (1+abs(xi_next[mask] - threshold))
+            H_vals[mask] = -np.exp(np.log(-H_vals[mask])*penalty)
+            #-np.exp(penalty_factor * abs(xi_next[mask] - threshold))
+            
+            # Apply the spline where xi_next <= 0.99, and penalty where xi_next > 0.99
+            #H_vals = np.where(xi_next > threshold, penalty, self.H_func(xi_next))
+            #plt.plot(-np.log(-H_vals))
+        else:
+            # Evaluate the spline normally if xi_next is within the valid range
+            H_vals = self.H_func(xi_next)
+            #plt.plot(-np.log(-H_vals))
+        '''
+        
+        return H_vals
     
     def wealth_growth(self, theta_t, c_t, xi_t):
         """
@@ -161,9 +192,13 @@ class IlliquidAssetModel:
         #get next period's dynamic
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
         'Calculate the terms in the Bellman equation'
+        #if np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
+        #    H_next_illiq = -np.exp(-35. )  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
+        #else: 
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.spline(xi_next))          # get terms in case of illiquidity
+
         util = self.utility(c_t * (1 - xi_t))         # get utility
         H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
-        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.H_func(xi_next))          # get terms in case of illiquidity
         H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
 
         # Debugging: Print objective function value
@@ -192,12 +227,17 @@ class IlliquidAssetModel:
         return H_t_val_opt, theta_t_opt, c_t_opt
     
     def getH_str(self):
+        # get finer grid and evaluate for the optimum of H()
         xi_fine_grid = np.linspace(.01, .99, 500)
         H_grid = self.H_func(xi_fine_grid)
+        theta_fine_grid = self.theta_func(xi_fine_grid)
+        c_fine_grid = self.c_func(xi_fine_grid)
         H_star = max(H_grid)
-        xi_star = xi_fine_grid[np.argmax(H_grid)]
-        return xi_star, H_star
-
+        str_index = np.argmax(H_grid)
+        xi_star = xi_fine_grid[str_index]
+        theta_star = theta_fine_grid[str_index]*(1-xi_star)
+        c_star = c_fine_grid[str_index]*(1-xi_star)
+        return H_star, xi_star, theta_star, c_star
 
     def solve(self, tol=1e-6, max_iter=500):
         # Store the optimal controls and value function
@@ -205,9 +245,9 @@ class IlliquidAssetModel:
         self.c_opt = np.zeros(self.gridpoints_Xi)
     
         # Initialize with the Merton solutions
-        H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
-        self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
-        self.H_star = H_t_vals_opt_k[0]
+        self.H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
+        self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt_k, s=0)
+        self.H_star = self.H_t_vals_opt_k[0]
     
         # Enable interactive mode for live plotting
         plt.ion()
@@ -217,25 +257,25 @@ class IlliquidAssetModel:
         for k in range(max_iter):
             self.init_guess = np.append(0.2*(1-.01)* np.ones(self.mu_w.shape[0]), 0.02*(1-.01))  # Initial guess for theta and c        
             for j, xi_j in enumerate(self.Xi_t):
-                H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
+                self.H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.bellman_equation(xi_j)
                 self.init_guess = np.append(self.theta_opt[j, :], self.c_opt[j])  # Initial guess for theta and c        
     
             # Compute the error between current and previous value functions
-            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-H_t_vals_opt_k))
-            self.H_func = UnivariateSpline(self.Xi_t, H_t_vals_opt_k, s=0)
+            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-self.H_t_vals_opt_k))
+            self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt_k, s=0)
+            # Fit splines also on c_opt and theta_opt
+            self.theta_func = UnivariateSpline(self.Xi_t, self.theta_opt, s=0)
+            self.c_func = UnivariateSpline(self.Xi_t, self.c_opt, s=0)
             'get H_str and xi_str'
-            self.xi_star, self.H_star = self.getH_str()
+            self.H_star, self.xi_star, self.theta_star, self.c_star = self.getH_str()
 
-            if k == 309:
-                print('is nan!')
-    
             # Print every k-th iteration
-            if k % 10 == 0:
+            if k % 25 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-np.log(-self.H_star):.4f}")
                 print(f"               xi* = {self.xi_star:.4f}")
-                axs, lines = self.plot_results(H_t_vals_opt_k, axs, lines, iteration=k)
+                #axs, lines = self.plot_results(axs, lines, iteration=k)
     
             # Stop if the error is below the tolerance
             if error < tol:
@@ -248,7 +288,7 @@ class IlliquidAssetModel:
         plt.ioff()
         plt.show()
 
-    def plot_results(self, H_t_vals_opt_k, axs=None, lines=None, iteration=None):
+    def plot_results(self, axs=None, lines=None, iteration=None):
         """
         Update the value function, optimal consumption, and portfolio weights in the same plot.
         The behavior is equivalent to MATLAB's 'hold on'.
@@ -256,40 +296,44 @@ class IlliquidAssetModel:
         if axs is None:  # Initialize subplots only once
             fig, axs = plt.subplots(3, 1, figsize=(8, 12))
             
-            # Create empty line objects that will be updated
-            lines = {
-                'H_t_vals': axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k), label="log(-H)")[0],
-                'c_opt': axs[1].plot(self.Xi_t, self.c_opt, label="c_opt")[0],
-                'theta_opt': [axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")[0]
-                              for i in range(self.theta_opt.shape[1])]
-            }
-            
-            # Set titles and labels for subplots
-            axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
-            axs[0].set_xlabel("xi_t")
-            axs[0].set_ylabel("log(-H)")
-            
-            axs[1].set_title("Optimal Consumption (c_opt)")
-            axs[1].set_xlabel("xi_t")
-            axs[1].set_ylabel("Consumption (c_t)")
-            
-            axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
-            axs[2].set_xlabel("xi_t")
-            axs[2].set_ylabel("theta_t")
-            
-            # Add legends to all subplots
-            for ax in axs:
-                ax.legend()
-            
-            # Adjust layout for better visualization
-            plt.tight_layout()
+            # # Create empty line objects that will be updated
+            # lines = {
+            #     'H_t_vals': axs[0].plot(self.Xi_t, -np.log(-H_t_vals_opt_k), label="log(-H)")[0],
+            #     'c_opt': axs[1].plot(self.Xi_t, self.c_opt, label="c_opt")[0],
+            #     'theta_opt': [axs[2].plot(self.Xi_t, self.theta_opt[:, i], label=f"Theta {i+1}")[0]
+            #                   for i in range(self.theta_opt.shape[1])]
+            # }
+
+
+        # Set titles and labels for subplots
+        axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
+        axs[0].set_xlabel("xi_t")
+        axs[0].set_ylabel("log(-H)")
+        axs[0].plot(self.Xi_t, -np.log(-self.H_t_vals_opt_k))        
         
-        else:
-            # Update the y-data of the existing lines without creating new plots
-            lines['H_t_vals'].set_ydata(-np.log(-H_t_vals_opt_k))
-            lines['c_opt'].set_ydata(self.c_opt)
-            for i, line in enumerate(lines['theta_opt']):
-                line.set_ydata(self.theta_opt[:, i])
+        axs[1].set_title("Optimal Consumption (c_opt)")
+        axs[1].set_xlabel("xi_t")
+        axs[1].set_ylabel("Consumption (c_t)")
+        axs[1].plot(self.Xi_t, self.c_opt*(1-self.Xi_t))
+
+        
+        axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
+        axs[2].set_xlabel("xi_t")
+        axs[2].set_ylabel("theta_t")
+        axs[2].plot(self.theta_opt.T*(1-self.Xi_t))
+        
+        # Add legends to all subplots
+        #for ax in axs:
+        #    ax.legend()
+        
+        # Adjust layout for better visualization
+        #plt.tight_layout()
+    
+        # Update the y-data of the existing lines without creating new plots
+        # lines['H_t_vals'].set_ydata(-np.log(-H_t_vals_opt_k))
+        # lines['c_opt'].set_ydata(self.c_opt)
+        # for i, line in enumerate(lines['theta_opt']):
+        #     line.set_ydata(self.theta_opt[:, i])
         
         # Redraw the figure to reflect updates
         plt.draw()
@@ -304,7 +348,7 @@ mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid ass
 Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
 gamma = 6.0
 beta = 0.03
-eta = 1/12
+eta = 1/10
 r = 0.02
 dt = 1.
 
@@ -312,16 +356,7 @@ dt = 1.
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model.solve()
 
-# Evaluate the H_func over the grid Xi_t
-H_vals_on_grid = model.H_func(model.Xi_t)
-
-# Find the index where H_func equals H_star (or is closest to it)
-index_of_H_star = np.argmax(H_vals_on_grid)
-
-# Corresponding Xi_t value
-xi_star = model.Xi_t[index_of_H_star]
-
-print(f"The value of xi_t corresponding to H_star is: {xi_star}")
-model.plot_results(H_vals_on_grid)
+print(f"xi_star: {model.xi_star}")
+model.plot_results()
 # Solve the dynamic problem
 #model.solve(xi_0, H_func, H_star)
