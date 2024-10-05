@@ -55,7 +55,7 @@ class IlliquidAssetModel:
         
         # Create a grid over xi
         self.gridpoints_Xi = 20
-        self.Xi_t = np.linspace(0.01,.95, self.gridpoints_Xi)
+        self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
         
     def merton_solution(self):
         """
@@ -136,7 +136,9 @@ class IlliquidAssetModel:
         'TODO : add here -np.inf for xi > 1. Check if this works'
         
         mask = xi_next > 1. 
-        H_vals[mask] = -np.inf
+        H_vals[mask] = -np.exp(30)
+        #if np.sum(mask) >0:
+        #    print('Crossing the border')
         
         return H_vals
     
@@ -253,7 +255,7 @@ class IlliquidAssetModel:
             self.H_star, self.xi_star, self.theta_star, self.c_star = self.getH_str()
 
             # Print every k-th iteration
-            if k % 25 == 0:
+            if k % 5 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-np.log(-self.H_star):.4f}")
@@ -310,7 +312,7 @@ if __name__ == "__main__":
     Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
     gamma = 6.0
     beta = 0.03
-    eta = 10
+    eta = 1/10
     r = 0.02
     dt = 1.
 
