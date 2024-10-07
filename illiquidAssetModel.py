@@ -2,7 +2,7 @@ import numpy as np
 from numpy.polynomial.hermite import hermgauss
 import itertools
 from scipy.linalg import cholesky
-from scipy.interpolate import UnivariateSpline
+from scipy.interpolate import UnivariateSpline, CubicSpline, interp1d
 from scipy.optimize import minimize, minimize_scalar
 import matplotlib.pyplot as plt  
 
@@ -55,7 +55,10 @@ class IlliquidAssetModel:
         
         # Create a grid over xi
         self.gridpoints_Xi = 20
-        self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
+        self.Xi_t = np.linspace(0.01,.90, self.gridpoints_Xi)
+        
+        # Finer grid 
+        self.xi_fine_grid = np.linspace(.01, .99, 2000)
         
     def merton_solution(self):
         """
@@ -125,27 +128,11 @@ class IlliquidAssetModel:
         # get z variable (transformed nodes stacked, transpose the vertor row) 
         
         return xn, Wn
-
-    def spline(self, xi_next):
-        """
-        Apply the spline normally for xi_next <= 0.99, and for xi_next > 0.99
-        apply a smooth penalty that decays towards negative infinity.
-        """
-        H_vals = self.H_func(xi_next)
-        
-        'TODO : add here -np.inf for xi > 1. Check if this works'
-        
-        mask = xi_next > 1. 
-        H_vals[mask] = -np.exp(30)
-        #if np.sum(mask) >0:
-        #    print('Crossing the border')
-        
-        return H_vals
     
     def wealth_growth(self, theta_t, c_t, xi_t):
         """
         Evaluate the growth rates R_{w,t + Delta t}, R_{x,t + Delta t}, and R_{q,t + Delta t}.
-        Note that we multiply by sqrt(2) to accomodate the quadrature transformation
+        We multiply by sqrt(2) to accomodate the quadrature transformation
         """
         dZ = self.xn*np.sqrt(2)
         # Liquid asset growth
@@ -160,6 +147,15 @@ class IlliquidAssetModel:
         # Change in illiquid asset share
         xi_next = xi_t * (R_x / R_q)
         
+        '''
+        if c_t <= 0:
+            print('Negative consumption')
+        
+        if np.any(xi_next > 1):
+            mask = xi_next > 1
+            print(f'xi_next> 0: {xi_next[mask]}')
+            print(f'theta: {theta_t[0]:.4f}') 
+        '''
         return R_q, xi_next
     
     def expectation(self, transformed_nodes):
@@ -178,9 +174,10 @@ class IlliquidAssetModel:
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
         'Calculate the terms in the Bellman equation'
         #if np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
-        #    H_next_illiq = -np.exp(-35. )  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
-        #else: 
-        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * self.spline(xi_next))          # get terms in case of illiquidity
+        #    H_next_illiq = -np.exp(35. )  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
+        #else:
+        H_vals_next = self.H_func(xi_next)            
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          # get terms in case of illiquidity
 
         util = self.utility(c_t * (1 - xi_t))         # get utility
         H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
@@ -202,9 +199,9 @@ class IlliquidAssetModel:
         '''
         #optimize the Bellman equation given a xi_t
         objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
-        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, 1)]  # Bounds for optimization
+        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .3)]  # Bounds for optimization
         #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, self.init_guess,method='Nelder-Mead') #, bounds=bounds
+        result = minimize(objective, self.init_guess,method='Nelder-Mead') # ',Nelder-Mead , bounds=bounds 
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         if result.success == False: print(f"Optimization convergence: {result.success}")
         
@@ -213,29 +210,38 @@ class IlliquidAssetModel:
     
     def getH_str(self):
         # get finer grid and evaluate for the optimum of H()
-        xi_fine_grid = np.linspace(.01, .99, 500)
-        H_grid = self.H_func(xi_fine_grid)
-        theta_fine_grid = self.theta_func(xi_fine_grid)
-        c_fine_grid = self.c_func(xi_fine_grid)
+        
+        
+        
+        H_grid = self.H_func(self.xi_fine_grid)
+        theta_fine_grid = self.theta_func(self.xi_fine_grid)
+        c_fine_grid = self.c_func(self.xi_fine_grid)
+        
         H_star = max(H_grid)
+        
         str_index = np.argmax(H_grid)
-        xi_star = xi_fine_grid[str_index]
+        
+        xi_star = self.xi_fine_grid[str_index]
         theta_star = theta_fine_grid[str_index]*(1-xi_star)
         c_star = c_fine_grid[str_index]*(1-xi_star)
         return H_star, xi_star, theta_star, c_star
+    
+    def fit_spline(self, y_value):
+        fit_fn = UnivariateSpline(self.Xi_t, y_value) #, fill_value = 'extrapolate'
+        return fit_fn
 
-    def solve(self, tol=1e-6, max_iter=500):
+    def solve(self, tol=1e-6, max_iter=800):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
     
         # Initialize with the Merton solutions
         self.H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
-        self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt_k, s=0)
+        self.H_func = self.fit_spline(self.H_t_vals_opt_k)
         self.H_star = self.H_t_vals_opt_k[0]
     
         # Enable interactive mode for live plotting
-        plt.ion()
+        #plt.ion()
         axs = None  # Initialize axis object
         lines = None  # Initialize line objects
         
@@ -247,20 +253,20 @@ class IlliquidAssetModel:
     
             # Compute the error between current and previous value functions
             error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-self.H_t_vals_opt_k))
-            self.H_func = UnivariateSpline(self.Xi_t, self.H_t_vals_opt_k, s=0)
+            self.H_func = self.fit_spline(self.H_t_vals_opt_k)
             # Fit splines also on c_opt and theta_opt
-            self.theta_func = UnivariateSpline(self.Xi_t, self.theta_opt, s=0)
-            self.c_func = UnivariateSpline(self.Xi_t, self.c_opt, s=0)
+            self.theta_func = self.fit_spline(self.theta_opt.flatten())
+            self.c_func = self.fit_spline(self.c_opt)
             'get H_str and xi_str'
             self.H_star, self.xi_star, self.theta_star, self.c_star = self.getH_str()
 
             # Print every k-th iteration
-            if k % 5 == 0:
+            if k % 25 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-np.log(-self.H_star):.4f}")
                 print(f"               xi* = {self.xi_star:.4f}")
-                #axs, lines = self.plot_results(axs, lines, iteration=k)
+                axs, lines = self.plot_results(axs, lines, iteration=k)
     
             # Stop if the error is below the tolerance
             if error < tol:
@@ -270,8 +276,8 @@ class IlliquidAssetModel:
             print("Failed to converge within the maximum iterations.")
     
         # Keep the plot open after convergence
-        plt.ioff()
-        plt.show()
+        #plt.ioff()
+        #plt.show()
 
     def plot_results(self, axs=None, lines=None, iteration=None):
         """
@@ -296,12 +302,14 @@ class IlliquidAssetModel:
         axs[2].set_title("Optimal Portfolio Weights (theta_opt)")
         axs[2].set_xlabel("xi_t")
         axs[2].set_ylabel("theta_t")
-        axs[2].plot(self.theta_opt.T*(1-self.Xi_t))
-                
+        axs[2].plot(self.Xi_t, self.theta_opt[:,0]*(1-self.Xi_t))
+        plt.show()
+        
+        '''        
         # Redraw the figure to reflect updates
         plt.draw()
         plt.pause(0.01)  # Pause to ensure the plot is updated
-        
+        '''                
         return axs, lines  # Return updated axes and line objects
 
 if __name__ == "__main__":
@@ -312,11 +320,13 @@ if __name__ == "__main__":
     Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
     gamma = 6.0
     beta = 0.03
-    eta = 1/10
+    eta = 52 #1/10
     r = 0.02
-    dt = 1.
+    dt = 1/20
 
     # Run 1 Year model
     model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
     model.solve()
-    model.plot()
+    model.plot_results()
+    
+    plt.plot

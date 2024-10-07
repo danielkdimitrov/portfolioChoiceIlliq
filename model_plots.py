@@ -6,36 +6,7 @@ Created on Fri Oct  4 19:03:33 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-import illiquidAssetModel
-
-
-# Define parameters
-mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
-Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
-gamma = 6.0
-beta = 0.03
-eta = 1
-r = 0.02
-dt = 1.
-
-# Run 1 Year model
-model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model_1year.solve()
-
-print(f"xi_star: {model.xi_star}")
-model_1year.plot_results()
-
-# Run 10 Year model
-eta = 1/10
-
-model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model_10year.solve()
-
-print(f"xi_star: {model.xi_star}")
-model_10year.plot_results()
-
-
-plot_value_function(model_1year, model_10year)
+from illiquidAssetModel import IlliquidAssetModel
 
 # Function to plot panel (a) Value Function
 def plot_value_function(model_1year, model_10year):
@@ -79,6 +50,36 @@ def plot_value_function(model_1year, model_10year):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+
+# Define parameters
+mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
+Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
+gamma = 6.0
+beta = 0.03
+eta = 1
+r = 0.02
+dt = 1
+
+# Run 1 Year model
+model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_1year.solve()
+
+print(f"1 year, xi_star: {model_1year.xi_star}")
+model_1year.plot_results()
+
+# Run 10 Year model
+eta = 1/10
+
+model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_10year.solve()
+
+print(f"10 year, xi_star: {model_10year.xi_star}")
+model_10year.plot_results()
+
+
+plot_value_function(model_1year, model_10year)
+
 
 # Assuming you already have the instances of the models created as model_1year and model_10year
 # plot_value_function(model_1year, model_10year)
