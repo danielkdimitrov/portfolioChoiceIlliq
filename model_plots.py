@@ -54,7 +54,13 @@ def plot_value_function(model_1year, model_10year):
 
 # Define parameters
 mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
-Sigma = np.array([[0.14**2,0.], [0.,0.14**2]])
+sigma = np.array([0.14,0.14])
+correlation_matrix = np.array([
+    [1.0,   0.],
+    [0.,   1.0]
+])
+Sigma = np.outer(sigma, sigma) * correlation_matrix
+
 gamma = 6.0
 beta = 0.03
 eta = 1
