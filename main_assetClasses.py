@@ -17,7 +17,7 @@ def plot_cec(model):
      with a dashed vertical line at xi_star.
      """
      # Example CEC curve (replace with actual computations)
-     H_t_vals_opt_k = model.H_func(model.xi_fine_grid)  # This is just a placeholder
+     H_t_vals_opt_k = -np.exp( model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
      
      cec_vals = model.getCec(H_t_vals_opt_k)
      

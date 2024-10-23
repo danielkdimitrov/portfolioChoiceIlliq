@@ -2,7 +2,7 @@ import numpy as np
 from numpy.polynomial.hermite import hermgauss
 import itertools
 from scipy.linalg import cholesky
-from scipy.interpolate import UnivariateSpline, CubicSpline, interp1d
+from scipy.interpolate import UnivariateSpline, CubicSpline, interp1d, InterpolatedUnivariateSpline
 from scipy.optimize import minimize, minimize_scalar
 import matplotlib.pyplot as plt  
 
@@ -59,7 +59,7 @@ class IlliquidAssetModel:
         self.Xi_t = np.linspace(0.01,.99, self.gridpoints_Xi)
         
         # Finer grid 
-        self.xi_fine_grid = np.linspace(.01, .99, 2000)
+        self.xi_fine_grid = np.linspace(.0, .99, 2000)
         
     def getCec(self, H):
         """
@@ -193,7 +193,7 @@ class IlliquidAssetModel:
         'Calculate the terms in the Bellman equation'
         if np.any(xi_next < 0) or np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
-            c_t = 0.001
+            c_t = 0.00001
         
         # transform back the H_vals function from log minus
         H_vals_next = - np.exp(self.ln_m_H_func(xi_next))            
@@ -259,7 +259,7 @@ class IlliquidAssetModel:
         c_star = c_fine_grid[str_index]*(1-xi_star)
         return ln_m_H_star, xi_star, c_star
     
-    def fit_spline(self, y_value, fitSplit=True):
+    def fit_spline(self, y_value, fitSplit=False):
         if fitSplit == True: 
             # Split the data into two parts
             mask = self.Xi_t < 0.8
@@ -267,10 +267,10 @@ class IlliquidAssetModel:
             x2, y2 = self.Xi_t[~mask], y_value[~mask]
             
             # Fit the first spline
-            spline1 = UnivariateSpline(x1, y1, k=2)
+            spline1 = UnivariateSpline(x1, y1, k=3)
             
             # Fit the second spline
-            spline2 = UnivariateSpline(x2, y2, k=2)
+            spline2 = UnivariateSpline(x2, y2, k=3)#, ext = 3
             
             # Combine the two splines into a single function
             def fit_fn(x):
@@ -287,7 +287,8 @@ class IlliquidAssetModel:
                     result[~mask] = spline2(x[~mask])
                     return result
         else: 
-            fit_fn = UnivariateSpline(self.Xi_t, y_value, k=2) #, fill_value = 'extrapolate'
+            fit_fn = interp1d(self.Xi_t, y_value, kind='cubic', fill_value='extrapolate',bounds_error=False)
+            #UnivariateSpline(self.Xi_t, y_value, k=2) #, ext=3, fill_value = 'extrapolate'
 
         return fit_fn
 
@@ -349,7 +350,7 @@ class IlliquidAssetModel:
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
                 #evaluate Certainty Equivalents with final H_function function 
-                self.cec_H_illiq = self.getCec(self.H_func(self.Xi_t))
+                self.cec_H_illiq = self.getCec(-np.exp(self.ln_m_H_func(self.Xi_t)))
                 break
         else:
             print("Failed to converge within the maximum iterations.")

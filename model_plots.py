@@ -51,7 +51,53 @@ def plot_value_function(model_1year, model_10year):
     plt.tight_layout()
     plt.show()
 
+# %% Three asset case
 
+# Define parameters
+mu = np.array([0.055, 0.055, 0.055])  # Example: two liquid assets and one illiquid asset
+sigma = np.array([0.14,0.14, 0.14])
+correlation_matrix = np.array([
+    [1.0,   0., 0.],
+    [0.,   1.0, 0.],
+    [0.,   0., 1.]
+])
+Sigma = np.outer(sigma, sigma) * correlation_matrix
+
+gamma = 6.0
+beta = 0.03
+r = 0.02
+dt = 1
+
+'Run 10 Year model'
+eta = 1/10
+
+model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_10year.BellmanIterSolve()
+
+print(f"10 year, xi_star: {model_10year.xi_star}")
+model_10year.plot_results()
+
+'Run 1 Year model'
+eta = 1
+
+model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_1year.BellmanIterSolve()
+
+print(f"1 year, xi_star: {model_1year.xi_star}")
+model_1year.plot_results()
+
+plot_value_function(model_1year, model_10year)
+
+
+
+
+
+
+
+
+
+
+# %% 
 # Define parameters
 mu = np.array([0.055, 0.055])  # Example: two liquid assets and one illiquid asset
 sigma = np.array([0.14,0.14])
@@ -83,8 +129,6 @@ model_1year.BellmanIterSolve()
 
 print(f"1 year, xi_star: {model_1year.xi_star}")
 model_1year.plot_results()
-
-
 
 plot_value_function(model_1year, model_10year)
 
