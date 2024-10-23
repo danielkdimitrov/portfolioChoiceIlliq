@@ -11,8 +11,8 @@ from illiquidAssetModel import IlliquidAssetModel
 # Function to plot panel (a) Value Function
 def plot_value_function(model_1year, model_10year):
     # Extract H values
-    H_1year = -np.log(-model_1year.H_t_vals_opt_k)  # H for 1 year
-    H_10year = -np.log(-model_10year.H_t_vals_opt_k)  # H for 10 years
+    H_1year = -model_1year.ln_m_H_t_vals_opt_k  # H for 1 year
+    H_10year = -model_10year.ln_m_H_t_vals_opt_k  # H for 10 years
     H_cont = -np.log(-model_1year.H_m)  # H continuous trading (use 1year as representative)
     
     # Create the ξ grid
@@ -20,10 +20,10 @@ def plot_value_function(model_1year, model_10year):
 
     # Diamond values
     xi_diamond_1Y = model_1year.xi_star
-    H_diamond_1Y = -np.log(-model_1year.H_star)
+    H_diamond_1Y = -model_1year.ln_m_H_star
 
     xi_diamond_10Y = model_10year.xi_star
-    H_diamond_10Y = -np.log(-model_10year.H_star)
+    H_diamond_10Y = -model_10year.ln_m_H_star
 
     # Plot
     plt.figure(figsize=(5, 4))
@@ -63,11 +63,10 @@ Sigma = np.outer(sigma, sigma) * correlation_matrix
 
 gamma = 6.0
 beta = 0.03
-eta = 1
 r = 0.02
 dt = 1
 
-# Run 10 Year model
+'Run 10 Year model'
 eta = 1/10
 
 model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
@@ -76,7 +75,9 @@ model_10year.BellmanIterSolve()
 print(f"10 year, xi_star: {model_10year.xi_star}")
 model_10year.plot_results()
 
-# Run 1 Year model
+'Run 1 Year model'
+eta = 1
+
 model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_1year.BellmanIterSolve()
 

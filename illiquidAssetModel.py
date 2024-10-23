@@ -191,7 +191,7 @@ class IlliquidAssetModel:
         #get next period's dynamic
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
         'Calculate the terms in the Bellman equation'
-        if np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
+        if np.any(xi_next < 0) or np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
             c_t = 0.001
         
@@ -259,11 +259,39 @@ class IlliquidAssetModel:
         c_star = c_fine_grid[str_index]*(1-xi_star)
         return ln_m_H_star, xi_star, c_star
     
-    def fit_spline(self, y_value):
-        fit_fn = UnivariateSpline(self.Xi_t, y_value, k=3) #, fill_value = 'extrapolate'
+    def fit_spline(self, y_value, fitSplit=True):
+        if fitSplit == True: 
+            # Split the data into two parts
+            mask = self.Xi_t < 0.8
+            x1, y1 = self.Xi_t[mask], y_value[mask]
+            x2, y2 = self.Xi_t[~mask], y_value[~mask]
+            
+            # Fit the first spline
+            spline1 = UnivariateSpline(x1, y1, k=2)
+            
+            # Fit the second spline
+            spline2 = UnivariateSpline(x2, y2, k=2)
+            
+            # Combine the two splines into a single function
+            def fit_fn(x):
+                'combine the splines'
+                if np.isscalar(x):
+                    if x < 0.8:
+                        return spline1(x)
+                    else:
+                        return spline2(x)
+                else:
+                    result = np.empty_like(x)
+                    mask = x < 0.8
+                    result[mask] = spline1(x[mask])
+                    result[~mask] = spline2(x[~mask])
+                    return result
+        else: 
+            fit_fn = UnivariateSpline(self.Xi_t, y_value, k=2) #, fill_value = 'extrapolate'
+
         return fit_fn
 
-    def BellmanIterSolve(self, tol=1e-6, max_iter=800):
+    def BellmanIterSolve(self, tol=1e-5, max_iter=500):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
@@ -277,8 +305,8 @@ class IlliquidAssetModel:
     
         # Enable interactive mode for live plotting
         #plt.ion()
-        axs = None  # Initialize axis object
-        lines = None  # Initialize line objects
+        #axs = None  # Initialize axis object
+        #lines = None  # Initialize line objects
         
         for k in range(max_iter):
             #print(f'Iteration {k}')
@@ -306,16 +334,16 @@ class IlliquidAssetModel:
 
 
             # Print every k-th iteration
-            if k % 5 == 0:
+            if k % 25 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
                 print(f"               xi* = {self.xi_star:.4f}")
+                #fig = plt.figure(figsize=(8, 6))
                 #axs, lines = self.plot_results(axs, lines, iteration=k)
-                fig = plt.figure(figsize=(8, 6))
-                ax = fig.add_subplot(111)
-                ax.plot(self.Xi_t, -self.ln_m_H_t_vals_opt_k)
-                ax.plot(self.Xi_t, -self.ln_m_H_func(self.Xi_t))
+                #ax = fig.add_subplot(111)
+                #ax.plot(self.Xi_t, -self.ln_m_H_t_vals_opt_k)
+                #ax.plot(self.Xi_t, -self.ln_m_H_func(self.Xi_t))
     
             # Stop if the error is below the tolerance
             if error < tol:
