@@ -57,7 +57,7 @@ Sigma = np.outer(sigma, sigma) * correlation_matrix
 
 
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r)
-model.solve()
+model.BellmanIterSolve()
 plot_cec(model)
 
 'Merton 1 risky assets PuE'

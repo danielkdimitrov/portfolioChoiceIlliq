@@ -67,21 +67,22 @@ eta = 1
 r = 0.02
 dt = 1
 
-# Run 1 Year model
-model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model_1year.solve()
-
-print(f"1 year, xi_star: {model_1year.xi_star}")
-model_1year.plot_results()
-
 # Run 10 Year model
 eta = 1/10
 
 model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model_10year.solve()
+model_10year.BellmanIterSolve()
 
 print(f"10 year, xi_star: {model_10year.xi_star}")
 model_10year.plot_results()
+
+# Run 1 Year model
+model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_1year.BellmanIterSolve()
+
+print(f"1 year, xi_star: {model_1year.xi_star}")
+model_1year.plot_results()
+
 
 
 plot_value_function(model_1year, model_10year)

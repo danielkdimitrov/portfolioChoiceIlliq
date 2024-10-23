@@ -186,7 +186,7 @@ class IlliquidAssetModel:
         return expectation
 
     
-    def H_t_objective(self, xi_t, params):
+    def ln_m_H_t_objective(self, xi_t, params):
         theta_t, c_t = params[:-1], params[-1]
         #get next period's dynamic
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
@@ -195,18 +195,27 @@ class IlliquidAssetModel:
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
             c_t = 0.001
         
-        H_vals_next = self.H_func(xi_next)            
-        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          # get terms in case of illiquidity
-
-        util = self.utility(c_t * (1 - xi_t))         # get utility
-        H_next_liq = self.H_star * self.expectation(R_q**(1 - self.gamma))         # get terms in case of liquidity
+        # transform back the H_vals function from log minus
+        H_vals_next = - np.exp(self.ln_m_H_func(xi_next))            
+        # get terms in case of illiquidity
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          
+        
+        # get intermediate utility
+        util = self.utility(c_t * (1 - xi_t))         
+        
+        # transform back ln minus H_star; get terms in case of liquidity
+        H_next_liq = -np.exp(self.ln_m_H_star) * self.expectation(R_q**(1 - self.gamma))      
+        
+        # Get next period value fn
         H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
-
+        # Transform again into log minus value units 
+        ln_m_H_t_val = np.log(-H_t_val)
+        #print(f'ln_m_H_t_val={ln_m_H_t_val:.2f}')
         # Debugging: Print objective function value
         #print(f"try c_t: {c_t}")
         #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
 
-        return H_t_val  
+        return ln_m_H_t_val  
 
     def optimize(self, xi_t):
         '''
@@ -217,51 +226,54 @@ class IlliquidAssetModel:
 
         '''
         #optimize the Bellman equation given a xi_t
-        objective = lambda params: np.log(-self.H_t_objective(xi_t, params)) # Minimize negative of value function (for optimization)
-        bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .1)]  # Bounds for optimization
+        # Minimize negative of (the log of the negative of) the value function (for optimization)
+        objective = lambda params: self.ln_m_H_t_objective(xi_t, params) 
+        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .1)]  # Bounds for optimization
         #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, self.init_guess,method='L-BFGS-B',bounds=bounds) # ',Nelder-Mead ,  
+        result = minimize(objective, self.init_guess,method='Nelder-Mead') # bounds=bounds',L-BFGS-B,  
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
+        #print(result)
 
         if not result.success: 
             print(f"Optimization convergence: {result.success}")
         #else: 
         #    print('No solution')
         
-        H_t_val_opt = -np.exp(result.fun)  # Get the maximum value of the function (negative of objective)
-        return H_t_val_opt, theta_t_opt, c_t_opt
+        ln_m_H_t_val_opt = result.fun  # Get the maximum value of the function (negative of objective)
+        return ln_m_H_t_val_opt, theta_t_opt, c_t_opt
     
     def getH_str(self):
-        # get finer grid and evaluate for the optimum of H()
-        
-        
-        
-        H_grid = self.H_func(self.xi_fine_grid)
+        '''
+        get finer grid and evaluate for the optimum of H()
+        '''
+        ln_m_H_grid = self.ln_m_H_func(self.xi_fine_grid)
         #theta_fine_grid = self.theta_func(self.xi_fine_grid)
         c_fine_grid = self.c_func(self.xi_fine_grid)
         
-        H_star = max(H_grid)
+        ln_m_H_star = min(ln_m_H_grid)
         
-        str_index = np.argmax(H_grid)
+        str_index = np.argmin(ln_m_H_grid)
         
         xi_star = self.xi_fine_grid[str_index]
         #theta_star = theta_fine_grid[str_index]*(1-xi_star)
         c_star = c_fine_grid[str_index]*(1-xi_star)
-        return H_star, xi_star, c_star
+        return ln_m_H_star, xi_star, c_star
     
     def fit_spline(self, y_value):
-        fit_fn = UnivariateSpline(self.Xi_t, y_value, k=1) #, fill_value = 'extrapolate'
+        fit_fn = UnivariateSpline(self.Xi_t, y_value, k=3) #, fill_value = 'extrapolate'
         return fit_fn
 
-    def solve(self, tol=1e-6, max_iter=800):
+    def BellmanIterSolve(self, tol=1e-6, max_iter=800):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
     
         # Initialize with the Merton solutions
-        self.H_t_vals_opt_k = self.H_m * np.ones_like(self.Xi_t)
-        self.H_func = self.fit_spline(self.H_t_vals_opt_k)
-        self.H_star = self.H_t_vals_opt_k[0]
+        self.ln_m_H_t_vals_opt_k = np.log(-np.ones_like(self.Xi_t)*self.H_m)
+        #for jc, xi in enumerate(self.Xi_t):
+        #    self.ln_m_H_t_vals_opt_k[jc] = self.H_m * np.ones_like(self.Xi_t) # self.utility(.03*(1-xi))
+        self.ln_m_H_func = self.fit_spline(self.ln_m_H_t_vals_opt_k)
+        self.ln_m_H_star = self.ln_m_H_t_vals_opt_k[0]
     
         # Enable interactive mode for live plotting
         #plt.ion()
@@ -269,34 +281,41 @@ class IlliquidAssetModel:
         lines = None  # Initialize line objects
         
         for k in range(max_iter):
+            #print(f'Iteration {k}')
             self.init_guess = np.append(0.2*(1-.01)* np.ones(self.mu_w.shape[0]), 0.02*(1-.01))  # Initial guess for theta and c        
             for j, xi_j in enumerate(self.Xi_t):
-                self.H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.optimize(xi_j)
+                #print(f'xi_j = {xi_j:.2f}')
+                self.ln_m_H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.optimize(xi_j)
                 self.init_guess = np.append(self.theta_opt[j, :], self.c_opt[j])  # Initial guess for theta and c
-                if self.H_t_vals_opt_k[j] > 0 :
-                    print('Positive value for xi_t : ', xi_j)
+                #if self.H_t_vals_opt_k[j] > 0 :
+                #    print('Positive value for xi_t : ', xi_j)
     
             # Compute the error between current and previous value functions
-            error = np.linalg.norm(np.log(-self.H_func(self.Xi_t)) - np.log(-self.H_t_vals_opt_k))
-            self.H_func = self.fit_spline(self.H_t_vals_opt_k)
-            if any(self.H_func(self.xi_fine_grid)> 0):
-                print('We have a problem')
+            error = np.linalg.norm(self.ln_m_H_func(self.Xi_t) - self.ln_m_H_t_vals_opt_k)
+            # fit spline over ln -H(xi)
+            self.ln_m_H_func = self.fit_spline(self.ln_m_H_t_vals_opt_k)
+            #if any(self.H_func(self.xi_fine_grid)> 0):
+            #    print('We have a problem')
             # Fit splines also on c_opt and theta_opt
             #TODO - fix this later for N> 1 liquid assets
             #self.theta_func = self.fit_spline(self.theta_opt[0].flatten())
             self.c_func = self.fit_spline(self.c_opt)
             'get H_str and xi_str'
             #self.H_star, self.xi_star, self.theta_star, self.c_star = self.getH_str()
-            self.H_star, self.xi_star, self.c_star = self.getH_str()
+            self.ln_m_H_star, self.xi_star, self.c_star = self.getH_str()
 
 
             # Print every k-th iteration
-            if k % 25 == 0:
+            if k % 5 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
-                print(f"               -ln(-H*) = {-np.log(-self.H_star):.4f}")
+                print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
                 print(f"               xi* = {self.xi_star:.4f}")
                 #axs, lines = self.plot_results(axs, lines, iteration=k)
+                fig = plt.figure(figsize=(8, 6))
+                ax = fig.add_subplot(111)
+                ax.plot(self.Xi_t, -self.ln_m_H_t_vals_opt_k)
+                ax.plot(self.Xi_t, -self.ln_m_H_func(self.Xi_t))
     
             # Stop if the error is below the tolerance
             if error < tol:
@@ -323,7 +342,7 @@ class IlliquidAssetModel:
         axs[0].set_title("Value Function: log(-H_t_vals_opt_k)")
         axs[0].set_xlabel("xi_t")
         axs[0].set_ylabel("log(-H)")
-        axs[0].plot(self.Xi_t, -np.log(-self.H_t_vals_opt_k))        
+        axs[0].plot(self.Xi_t, -self.ln_m_H_t_vals_opt_k)        
         
         axs[1].set_title("Optimal Consumption (c_opt)")
         axs[1].set_xlabel("xi_t")
