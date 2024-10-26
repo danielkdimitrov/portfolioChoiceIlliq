@@ -30,7 +30,7 @@ class IlliquidAssetModel:
 
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
-        self.m = 10 #number of quadrature points 
+        self.m = 15 #number of quadrature points 
         
         self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
@@ -49,6 +49,7 @@ class IlliquidAssetModel:
         
         # Merton solution, n assets 
         self.pi_m, self.c_m, self.H_m = self.merton_solution()
+        self.alloc_m = np.stack([1-sum(self.pi_m), self.pi_m] )
         self.cec_m = self.getCec(self.H_m)
         
         # Generate quadrature points and weights
@@ -242,22 +243,33 @@ class IlliquidAssetModel:
         ln_m_H_t_val_opt = result.fun  # Get the maximum value of the function (negative of objective)
         return ln_m_H_t_val_opt, theta_t_opt, c_t_opt
     
-    def getH_str(self):
+    def getH_str(self, finalRun=False):
         '''
         get finer grid and evaluate for the optimum of H()
         '''
         ln_m_H_grid = self.ln_m_H_func(self.xi_fine_grid)
-        #theta_fine_grid = self.theta_func(self.xi_fine_grid)
-        c_fine_grid = self.c_func(self.xi_fine_grid)
+        #
         
         ln_m_H_star = min(ln_m_H_grid)
         
         str_index = np.argmin(ln_m_H_grid)
         
         xi_star = self.xi_fine_grid[str_index]
-        #theta_star = theta_fine_grid[str_index]*(1-xi_star)
-        c_star = c_fine_grid[str_index]*(1-xi_star)
-        return ln_m_H_star, xi_star, c_star
+        if finalRun == True:
+            'get c star'
+            c_func = self.fit_spline(self.c_opt)
+            c_fine_grid = c_func(self.xi_fine_grid)
+            self.c_star_xi = c_fine_grid[str_index]*(1-xi_star)
+            'get theta_star' 
+            self.theta_star_xi = np.zeros(self.n-1)
+            for j in range(self.n-1):
+                theta_func = self.fit_spline(self.theta_opt[:,j])
+                theta_fine_grid = theta_func(self.xi_fine_grid)   
+                self.theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
+            risky_alloc = np.hstack([self.theta_star_xi.T], self.xi_star )
+            self.alloc_illq = np.array([1- sum(risky_alloc), risky_alloc])
+            #return ln_m_H_star, xi_star, theta_star_xi, c_star_xi
+        return ln_m_H_star, xi_star
     
     def fit_spline(self, y_value, fitSplit=False):
         if fitSplit == True: 
@@ -327,11 +339,10 @@ class IlliquidAssetModel:
             #    print('We have a problem')
             # Fit splines also on c_opt and theta_opt
             #TODO - fix this later for N> 1 liquid assets
-            #self.theta_func = self.fit_spline(self.theta_opt[0].flatten())
-            self.c_func = self.fit_spline(self.c_opt)
+            #self.c_func = self.fit_spline(self.c_opt)
             'get H_str and xi_str'
-            #self.H_star, self.xi_star, self.theta_star, self.c_star = self.getH_str()
-            self.ln_m_H_star, self.xi_star, self.c_star = self.getH_str()
+            #self.H_star, self.xi_star = self.getH_str()
+            self.ln_m_H_star, self.xi_star  = self.getH_str()
 
 
             # Print every k-th iteration
@@ -351,8 +362,12 @@ class IlliquidAssetModel:
                 print(f"Converged in {k+1} iterations.")
                 #evaluate Certainty Equivalents with final H_function function 
                 self.cec_H_illiq = self.getCec(-np.exp(self.ln_m_H_func(self.Xi_t)))
+                self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = self.getH_str(True)
+
                 break
         else:
+            self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = self.getH_str(True)
+
             print("Failed to converge within the maximum iterations.")
     
         # Keep the plot open after convergence

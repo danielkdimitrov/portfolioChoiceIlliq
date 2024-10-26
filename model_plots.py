@@ -88,12 +88,26 @@ model_1year.plot_results()
 
 plot_value_function(model_1year, model_10year)
 
+# %%
 
+merton_alloc = np.hstack([1- sum(model_1year.pi_m), model_1year.pi_m])
+'collect the assets together: merton, model 1, model 2, etc. ]'
+cash = np.array(merton_alloc, 1- sum([model_1year.theta_star_xi, model_1year.xi_star]   ))
+liq1 = np.array(,  model_1year.theta_star_xi[0], ) 
+liq2 = 
+illiq  = np.array(   , model_1year.xi_star)
 
+# Set bar width
+bar_width = 0.5
+indices = np.arange(model_1year.n+1)
+axisBar = [0, 1]
 
+fig, ax = plt.subplots(figsize=(10, 6))
 
+# Create stacked bars
+ax.bar(axisBar, merton_alloc, color='#4e79a7', edgecolor='white', width=bar_width, label='merton')
 
-
+ax.bar(illiquid_alloc, bottom=cash, color='#a0cfa2', edgecolor='white', width=bar_width, label='illiquid')
 
 
 

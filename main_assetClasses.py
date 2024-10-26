@@ -116,7 +116,7 @@ Sigma = np.outer(sigma, sigma) * correlation_matrix
 model = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r)
 
 # Solve the model
-model.solve()
+model.BellmanIterSolve()
 
 # Access results, for example, H_t_vals_opt_k or consumption paths
 print(model.xi_star)
