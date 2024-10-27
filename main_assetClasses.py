@@ -7,30 +7,10 @@ Created on Wed Oct  9 11:59:49 2024
 
 import numpy as np
 import matplotlib.pyplot as plt
-from illiquidAssetModel import IlliquidAssetModel
+from illiquidAssetModel import IlliquidAssetModel, plot_cec
 
+from myPlots import plot_cec
 
-
-def plot_cec(model):
-     """
-     Plots the Certainty Equivalent Consumption (CEC) as a function of xi,
-     with a dashed vertical line at xi_star.
-     """
-     # Example CEC curve (replace with actual computations)
-     H_t_vals_opt_k = -np.exp( model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
-     
-     cec_vals = model.getCec(H_t_vals_opt_k)
-     
-     # Create the plot
-     plt.plot(model.xi_fine_grid, cec_vals, color='blue')
-     
-     # Add the vertical dashed line at xi_star
-     plt.axvline(x=model.xi_star, color='gray', linestyle='--')
-     
-     # Labeling
-     plt.xlabel(r'$\xi$')
-     plt.ylabel(r'$CEC(\xi)$')
-     plt.show()
 
 ##########
 

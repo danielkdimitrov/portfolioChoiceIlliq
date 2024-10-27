@@ -49,7 +49,7 @@ class IlliquidAssetModel:
         
         # Merton solution, n assets 
         self.pi_m, self.c_m, self.H_m = self.merton_solution()
-        self.alloc_m = np.stack([1-sum(self.pi_m), self.pi_m] )
+        self.alloc_m = np.hstack([1-sum(self.pi_m), self.pi_m] )
         self.cec_m = self.getCec(self.H_m)
         
         # Generate quadrature points and weights
@@ -266,8 +266,8 @@ class IlliquidAssetModel:
                 theta_func = self.fit_spline(self.theta_opt[:,j])
                 theta_fine_grid = theta_func(self.xi_fine_grid)   
                 self.theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
-            risky_alloc = np.hstack([self.theta_star_xi.T], self.xi_star )
-            self.alloc_illq = np.array([1- sum(risky_alloc), risky_alloc])
+            risky_alloc = np.hstack([self.theta_star_xi.T, self.xi_star])
+            self.alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
             #return ln_m_H_star, xi_star, theta_star_xi, c_star_xi
         return ln_m_H_star, xi_star
     
@@ -362,12 +362,12 @@ class IlliquidAssetModel:
                 print(f"Converged in {k+1} iterations.")
                 #evaluate Certainty Equivalents with final H_function function 
                 self.cec_H_illiq = self.getCec(-np.exp(self.ln_m_H_func(self.Xi_t)))
-                self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = self.getH_str(True)
-
+                #self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = 
+                self.getH_str(True)
                 break
+            
         else:
-            self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = self.getH_str(True)
-
+            self.getH_str(True)
             print("Failed to converge within the maximum iterations.")
     
         # Keep the plot open after convergence
