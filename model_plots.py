@@ -11,15 +11,15 @@ from illiquidAssetModel import IlliquidAssetModel
 from myPlots import plot_value_function, plot_allocation_chart
 
 
-# %% Three asset case w/ uncorrelated assets
+# %% Three asset case w/ correlated assets
 
 # Define parameters
 mu = np.array([0.055, 0.055, 0.055])  # Example: two liquid assets and one illiquid asset
 sigma = np.array([0.14,0.14, 0.14])
 correlation_matrix = np.array([
-    [1.0,   0., 0.],
+    [1.0,   0.8, 0.],
     [0.,   1.0, 0.],
-    [0.,   0., 1.]
+    [0.,   0.8, 1.]
 ])
 Sigma = np.outer(sigma, sigma) * correlation_matrix
 
@@ -51,7 +51,10 @@ plot_value_function(model_1year, model_10year)
 # Plot stachs 
 plot_allocation_chart(model_1year.alloc_m, model_10year.alloc, model_10year.alloc)
 
-# %% Three asset case w/ correlated assets
+
+
+
+# %% Three asset case w/ uncorrelated assets
 
 # Define parameters
 mu = np.array([0.055, 0.055, 0.055])  # Example: two liquid assets and one illiquid asset
@@ -59,7 +62,7 @@ sigma = np.array([0.14,0.14, 0.14])
 correlation_matrix = np.array([
     [1.0,   0., 0.],
     [0.,   1.0, 0.],
-    [0.,   0.8, 1.]
+    [0.,   0., 1.]
 ])
 Sigma = np.outer(sigma, sigma) * correlation_matrix
 

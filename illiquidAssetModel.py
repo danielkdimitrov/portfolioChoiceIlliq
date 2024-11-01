@@ -6,6 +6,7 @@ from scipy.interpolate import UnivariateSpline, CubicSpline, interp1d, Interpola
 from scipy.optimize import minimize, minimize_scalar
 import matplotlib.pyplot as plt  
 
+
 class IlliquidAssetModel:
     def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1):
         '''        
@@ -195,9 +196,8 @@ class IlliquidAssetModel:
         if np.any(xi_next < 0) or np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
             c_t = 0.00001
-        
         # transform back the H_vals function from log minus
-        H_vals_next = - np.exp(self.ln_m_H_func(xi_next))            
+        H_vals_next = - np.exp(self.ln_m_H_func(xi_next))
         # get terms in case of illiquidity
         H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          
         
@@ -322,8 +322,8 @@ class IlliquidAssetModel:
         #lines = None  # Initialize line objects
         
         for k in range(max_iter):
-            #print(f'Iteration {k}')
-            self.init_guess = np.append(0.2*(1-.01)* np.ones(self.mu_w.shape[0]), 0.02*(1-.01))  # Initial guess for theta and c        
+            print(f'Iteration {k}')
+            self.init_guess = np.append(0.1*np.ones_like(self.mu_w), .02)  # Initial guess for theta and c        
             for j, xi_j in enumerate(self.Xi_t):
                 #print(f'xi_j = {xi_j:.2f}')
                 self.ln_m_H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.optimize(xi_j)
@@ -337,9 +337,6 @@ class IlliquidAssetModel:
             self.ln_m_H_func = self.fit_spline(self.ln_m_H_t_vals_opt_k)
             #if any(self.H_func(self.xi_fine_grid)> 0):
             #    print('We have a problem')
-            # Fit splines also on c_opt and theta_opt
-            #TODO - fix this later for N> 1 liquid assets
-            #self.c_func = self.fit_spline(self.c_opt)
             'get H_str and xi_str'
             #self.H_star, self.xi_star = self.getH_str()
             self.ln_m_H_star, self.xi_star  = self.getH_str()
@@ -351,8 +348,7 @@ class IlliquidAssetModel:
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
                 print(f"               xi* = {self.xi_star:.4f}")
-                #fig = plt.figure(figsize=(8, 6))
-                #axs, lines = self.plot_results(axs, lines, iteration=k)
+                self.plot_results()
                 #ax = fig.add_subplot(111)
                 #ax.plot(self.Xi_t, -self.ln_m_H_t_vals_opt_k)
                 #ax.plot(self.Xi_t, -self.ln_m_H_func(self.Xi_t))
@@ -406,6 +402,7 @@ class IlliquidAssetModel:
         plt.pause(0.01)  # Pause to ensure the plot is updated
         '''                
         return axs, lines  # Return updated axes and line objects
+
 
 if __name__ == "__main__":
     # You can specify eta = 1 for one-year variables
