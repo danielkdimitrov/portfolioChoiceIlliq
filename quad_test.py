@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov  1 17:59:20 2024
+
+@author: danie
+"""
 import numpy as np
 from numpy.polynomial.hermite import hermgauss
 import itertools
@@ -28,16 +34,26 @@ class IlliquidAssetModel:
         '''
         self.mu = mu
         self.n = len(self.mu)  # Number of risk factors (corresponding to the num. of risky assets, incl. the illiquid one)
-
+        
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
-        self.m = 15 #number of quadrature points 
+        self.m = 20 #number of quadrature points 
         
         self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
         self.sigma_w = self.sigma[:-1, :]
         self.sigma_x = self.sigma[-1, :]
         self.r = r  # Risk-free rate
+        
+        retu = self.mu[:, np.newaxis]+self.sigma @ self.xn.T*np.sqrt(2)
+        test_var = np.exp( np.ones((1,3) ) @ retu )
+        self.expectation(test_var)
+        1.2145820186100698
+        
+        retu = self.mu[:, np.newaxis]+self.sigma @ self.dZ.T
+        test_sim = np.exp( np.ones((1,3)) @ retu )
+        np.mean(test_sim)
+        1.214273346746539
         
         # Utility model
         self.beta = beta
@@ -54,7 +70,7 @@ class IlliquidAssetModel:
         self.cec_m = self.getCec(self.H_m)
         
         # Generate quadrature points and weights
-        self.useQuadrature=False
+        self.useQuadrature=True
         if self.useQuadrature == True:
             self.xn, self.Wn = self.generate_quadrature_points()
         
@@ -64,7 +80,7 @@ class IlliquidAssetModel:
         
         # Finer grid 
         self.xi_fine_grid = np.linspace(.0, .99, 2000)
-        nSims = 5*10**3
+        nSims = 5*10**5
         self.dZ = self.generate_standard_normal(nSims, self.n)
         
     def getCec(self, H):
@@ -102,7 +118,7 @@ class IlliquidAssetModel:
         lambda_ = np.linalg.solve(self.sigma, mu_minus_r)
         
         # Optimal portfolio allocation: pi = (1 / gamma) * Sigma^{-1} * (mu - r1)
-        pi_opt = (1 / self.gamma) * np.linalg.inv(self.sigma.T) @ lambda_
+        pi_opt = (1 / self.gamma) * np.linalg.inv(self.Sigma) @ mu_minus_r
                 
         # Optimal consumption: c = (beta + r(gamma - 1)) / gamma + 0.5 * (gamma - 1) / gamma^2 * ||lambda||^2
         c_opt = (self.beta + self.r * (self.gamma - 1)) / self.gamma + 0.5 * (self.gamma - 1) / (self.gamma**2) * np.dot(lambda_, lambda_)
@@ -176,10 +192,16 @@ class IlliquidAssetModel:
         else: 
             dZ = self.dZ
         # Liquid asset growth
-        R_w = 1 + (self.r + theta_t @ (self.mu_w - self.r) - c_t) * self.dt + (theta_t @ self.sigma_w) @ dZ.T * np.sqrt(self.dt)
+        w = np.array( (1/3, 1/3, 1/3) )
+        R_w =    (w @ self.sigma) @ dZ.T * np.sqrt(self.dt)
+        self.expectation(R_w)
+        
+        
+        R_w_sim =    (w @ self.sigma) @ self.dZ.T * np.sqrt(self.dt)
+        np.mean(R_w_sim)
         
         # Illiquid asset growth
-        R_x = 1 + self.mu_x * self.dt + self.sigma_x @ dZ.T * np.sqrt(self.dt)
+        R_x =self.mu_x * self.dt + self.sigma_x @ dZ.T * np.sqrt(self.dt)
         
         # Total wealth growth
         R_q = (1 - xi_t) * R_w + xi_t * R_x
@@ -205,7 +227,7 @@ class IlliquidAssetModel:
         Returns:      float: The calculated expectation.
         """
         if self.useQuadrature == True:
-            expectation = self.const*np.sum(self.Wn * transformed_nodes)
+            expectation = np.sum(self.Wn * transformed_nodes)*self.const
         else: 
             self.expectation = np.mean(transformed_nodes)
         return expectation

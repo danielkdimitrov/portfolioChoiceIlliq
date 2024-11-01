@@ -6,7 +6,7 @@ Created on Fri Oct  4 19:03:33 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from illiquidAssetModel import IlliquidAssetModel
+from quad_test import IlliquidAssetModel
 
 from myPlots import plot_value_function, plot_allocation_chart
 
@@ -17,9 +17,9 @@ from myPlots import plot_value_function, plot_allocation_chart
 mu = np.array([0.055, 0.055, 0.055])  # Example: two liquid assets and one illiquid asset
 sigma = np.array([0.14,0.14, 0.14])
 correlation_matrix = np.array([
-    [1.0,   0.8, 0.],
-    [0.,   1.0, 0.],
-    [0.,   0.8, 1.]
+    [1.0,   0., 0. ],
+    [0.,   1.0, 0.8],
+    [0.,   0.8, 1. ]
 ])
 Sigma = np.outer(sigma, sigma) * correlation_matrix
 
@@ -30,6 +30,7 @@ dt = 1
 
 'Run 10 Year model'
 eta = 1/10
+
 
 model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_10year.BellmanIterSolve()
@@ -49,7 +50,7 @@ model_1year.plot_results()
 # Plot value fn comparison
 plot_value_function(model_1year, model_10year)
 # Plot stachs 
-plot_allocation_chart(model_1year.alloc_m, model_10year.alloc, model_10year.alloc)
+plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_10year.alloc)
 
 
 
