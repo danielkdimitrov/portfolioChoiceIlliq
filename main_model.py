@@ -6,7 +6,7 @@ Created on Fri Oct  4 19:03:33 2024
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from quad_test import IlliquidAssetModel
+from illiquidAssetModel import IlliquidAssetModel
 
 from myPlots import plot_value_function, plot_allocation_chart
 
@@ -31,8 +31,7 @@ dt = 1
 'Run 10 Year model'
 eta = 1/10
 
-
-model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt, True)
 model_10year.BellmanIterSolve()
 
 print(f"10 year, xi_star: {model_10year.xi_star}")

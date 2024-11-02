@@ -49,6 +49,8 @@ def plot_value_function(model_1year, model_10year):
     plt.title('Value Function')
     plt.legend()
     
+    plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    
     plt.grid(True)
     plt.tight_layout()
     plt.show()

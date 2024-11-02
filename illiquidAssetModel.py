@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 class IlliquidAssetModel:
-    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1):
+    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1, useQuadrature=True):
         '''        
         Parameters
         ----------
@@ -31,7 +31,7 @@ class IlliquidAssetModel:
 
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
-        self.m = 15 #number of quadrature points 
+        self.m = 4 #number of quadrature points 
         
         self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
@@ -54,18 +54,22 @@ class IlliquidAssetModel:
         self.cec_m = self.getCec(self.H_m)
         
         # Generate quadrature points and weights
-        self.useQuadrature=False
+        self.useQuadrature = useQuadrature
         if self.useQuadrature == True:
-            self.xn, self.Wn = self.generate_quadrature_points()
-        
+            'Quadrate model'
+            xn, self.Wn = self.generate_quadrature_points()
+            self.dZ = xn*np.sqrt(2)
+        else:
+            'Simulated model'
+            nSims = 5*10**3
+            self.dZ = self.generate_standard_normal(nSims, self.n)
+            
         # Create a grid over xi
         self.gridpoints_Xi = 20
         self.Xi_t = np.linspace(0.,.99, self.gridpoints_Xi)
         
         # Finer grid 
         self.xi_fine_grid = np.linspace(.0, .99, 2000)
-        nSims = 5*10**3
-        self.dZ = self.generate_standard_normal(nSims, self.n)
         
     def getCec(self, H):
         """
@@ -126,9 +130,9 @@ class IlliquidAssetModel:
     
     def utility(self, c):
         """CRRA utility function."""
-        if c <= 0:
-            return -np.inf #0.1**8  # Penalize zero or negative consumption
-        elif self.gamma == 1:
+        #if c <= 0:
+        #    return -np.inf #0.1**8  # Penalize zero or negative consumption
+        if self.gamma == 1:
             return np.log(c)
         else:
             return c**(1 - self.gamma) / (1 - self.gamma)
@@ -171,15 +175,11 @@ class IlliquidAssetModel:
         Evaluate the growth rates R_{w,t + Delta t}, R_{x,t + Delta t}, and R_{q,t + Delta t}.
         We multiply by sqrt(2) to accomodate the quadrature transformation
         """
-        if self.useQuadrature == True:
-            dZ = self.xn*np.sqrt(2)
-        else: 
-            dZ = self.dZ
         # Liquid asset growth
-        R_w = 1 + (self.r + theta_t @ (self.mu_w - self.r) - c_t) * self.dt + (theta_t @ self.sigma_w) @ dZ.T * np.sqrt(self.dt)
+        R_w = 1 + (self.r + theta_t @ (self.mu_w - self.r) - c_t) * self.dt + (theta_t @ self.sigma_w) @ self.dZ.T * np.sqrt(self.dt)
         
         # Illiquid asset growth
-        R_x = 1 + self.mu_x * self.dt + self.sigma_x @ dZ.T * np.sqrt(self.dt)
+        R_x = 1 + self.mu_x * self.dt + self.sigma_x @ self.dZ.T * np.sqrt(self.dt)
         
         # Total wealth growth
         R_q = (1 - xi_t) * R_w + xi_t * R_x
@@ -205,10 +205,10 @@ class IlliquidAssetModel:
         Returns:      float: The calculated expectation.
         """
         if self.useQuadrature == True:
-            expectation = self.const*np.sum(self.Wn * transformed_nodes)
+            value = self.const*np.sum(self.Wn * transformed_nodes)
         else: 
-            self.expectation = np.mean(transformed_nodes)
-        return expectation
+            value = np.mean(transformed_nodes)
+        return value
 
     
     def ln_m_H_t_objective(self, xi_t, params):
@@ -217,29 +217,28 @@ class IlliquidAssetModel:
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
         'Calculate the terms in the Bellman equation'
         if np.any(xi_next < 0) or np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
-            ln_m_H_t_val = 50    
+            #ln_m_H_t_val = 2*self.ln_m_H_star    # or just fix to 50 
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
-            # c_t = 0. #0.1**12
-        else:                 
-            # transform back the H_vals function from log minus
-            H_vals_next = - np.exp(self.ln_m_H_func(xi_next))
-            # get terms in case of illiquidity
-            H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          
+            c_t = 0.1**10
+        #else:                 
+        # get intermediate utility
+        util = self.utility(c_t * (1 - xi_t))         
+        # transform back the H_vals function from log minus
+        H_vals_next = - np.exp(self.ln_m_H_func(xi_next))
+        # get terms in case of illiquidity
+        H_next_illiq = self.expectation(R_q**(1 - self.gamma) * H_vals_next)          
+                        
+        # transform back ln minus H_star; get terms in case of liquidity
+        H_next_liq = -np.exp(self.ln_m_H_star) * self.expectation(R_q**(1 - self.gamma))      
             
-            # get intermediate utility
-            util = self.utility(c_t * (1 - xi_t))         
-            
-            # transform back ln minus H_star; get terms in case of liquidity
-            H_next_liq = -np.exp(self.ln_m_H_star) * self.expectation(R_q**(1 - self.gamma))      
-            
-            # Get next period value fn
-            H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
-            # Transform again into log minus value units 
-            ln_m_H_t_val = np.log(-H_t_val)
+        # Get next period value fn
+        H_t_val = util * self.dt + self.delta * (self.p * H_next_liq + (1 - self.p) * H_next_illiq)
+        # Transform again into log minus value units 
+        ln_m_H_t_val = np.log(-H_t_val)
         #print(f'ln_m_H_t_val={ln_m_H_t_val:.2f}')
-            # Debugging: Print objective function value
-            #print(f"try c_t: {c_t}")
-            #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
+        # Debugging: Print objective function value
+        #print(f"try c_t: {c_t}")
+        #print(f"ln(-H_t_val): {np.log(-H_t_val)}")
 
         return ln_m_H_t_val  
 
@@ -255,7 +254,7 @@ class IlliquidAssetModel:
         objective = lambda params: self.ln_m_H_t_objective(xi_t, params) 
         #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .1)]  # Bounds for optimization
         #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, self.init_guess,method='Nelder-Mead') # bounds=bounds',L-BFGS-B,  
+        result = minimize(objective, self.init_guess[self.j_gridPoint ,:],method='Nelder-Mead') # bounds=bounds',L-BFGS-B,  
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         #print(result)
 
@@ -322,7 +321,7 @@ class IlliquidAssetModel:
 
         return fit_fn
 
-    def BellmanIterSolve(self, tol=1e-5, max_iter=500):
+    def BellmanIterSolve(self, tol=1e-5, max_iter=600):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
@@ -338,14 +337,16 @@ class IlliquidAssetModel:
         #plt.ion()
         #axs = None  # Initialize axis object
         #lines = None  # Initialize line objects
+        self.init_guess = np.ones((len(self.Xi_t), len(self.mu_w)+1)) * np.append(0.1*np.ones_like(self.mu_w), .02)  # Initial guess for theta and c        
+        
         
         for k in range(max_iter):
             #print(f'Iteration {k}')
-            self.init_guess = np.append(0.1*np.ones_like(self.mu_w), .02)  # Initial guess for theta and c        
             for j, xi_j in enumerate(self.Xi_t):
+                self.j_gridPoint = j 
                 #print(f'xi_j = {xi_j:.2f}')
                 self.ln_m_H_t_vals_opt_k[j], self.theta_opt[j, :], self.c_opt[j] = self.optimize(xi_j)
-                #self.init_guess = np.append(self.theta_opt[j, :], self.c_opt[j])  # Initial guess for theta and c
+                self.init_guess[j,:] = np.append(self.theta_opt[j, :], self.c_opt[j])  # Initial guess for theta and c
                 #if self.H_t_vals_opt_k[j] > 0 :
                 #    print('Positive value for xi_t : ', xi_j)
     
@@ -361,7 +362,7 @@ class IlliquidAssetModel:
 
 
             # Print every k-th iteration
-            if k % 10 == 0:
+            if k % 25 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
