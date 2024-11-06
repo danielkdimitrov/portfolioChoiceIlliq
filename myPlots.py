@@ -11,33 +11,33 @@ import matplotlib.pyplot as plt
 
 
 # Function to plot panel (a) Value Function
-def plot_value_function(model_1year, model_10year):
+def plot_value_function(model1, model2):
     # Extract H values
-    H_1year = -model_1year.ln_m_H_t_vals_opt_k  # H for 1 year
-    H_10year = -model_10year.ln_m_H_t_vals_opt_k  # H for 10 years
-    H_cont = -np.log(-model_1year.H_m)  # H continuous trading (use 1year as representative)
+    model1_values = -model1.ln_m_H_t_vals_opt_k  # H for 1 year
+    model2_values = -model2.ln_m_H_t_vals_opt_k  # H for 10 years
+    values_merton = -np.log(-model1.H_m)  # H continuous trading (use 1year as representative)
     
     # Create the ξ grid
-    xi_grid = model_1year.Xi_t
+    xi_grid = model1.Xi_t
 
     # Diamond values
-    xi_diamond_1Y = model_1year.xi_star
-    H_diamond_1Y = -model_1year.ln_m_H_star
+    xi_diamond_1Y = model1.xi_star
+    H_diamond_1Y = -model1.ln_m_H_star
 
-    xi_diamond_10Y = model_10year.xi_star
-    H_diamond_10Y = -model_10year.ln_m_H_star
+    xi_diamond_10Y = model2.xi_star
+    H_diamond_10Y = -model2.ln_m_H_star
 
     # Plot
     plt.figure(figsize=(5, 4))
     
     # Plot 1 year (solid line)
-    plt.plot(xi_grid, H_1year, 'b-', label='1 Year Friction')
+    plt.plot(xi_grid, model1_values, 'b-', label='1 Year Friction')
     
     # Plot 10 year (dotted line)
-    plt.plot(xi_grid, H_10year, 'b:', label='10 Year Friction')
+    plt.plot(xi_grid, model2_values, 'b:', label='10 Year Friction')
     
     # Plot continuous (dashed line, horizontal)
-    plt.axhline(H_cont, color='gray', linestyle='--', label='Continuous Trading')
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading')
     
     # Plot diamond point
     plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
@@ -47,6 +47,158 @@ def plot_value_function(model_1year, model_10year):
     plt.xlabel(r'$\xi$')
     plt.ylabel(r'$-\log(-H(\xi))$')
     plt.title('Value Function')
+    plt.legend()
+    
+    plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
+def plot_value_function_1m(model1):
+    # Create the ξ grid
+    xi_grid = model1.xi_fine_grid
+
+    # Extract H values
+    model1_values = -model1.ln_m_H_func(xi_grid)  # H for 1 year
+    values_merton = -np.log(-model1.H_m)  # H continuous trading (use 1 year as representative)
+    values_merton_H2 = -np.log(-model1.H_m2)  # H continuous trading (use 1 year as representative)
+
+    # Diamond values
+    xi_diamond_1Y = model1.xi_star
+    H_diamond_1Y = -model1.ln_m_H_star
+    
+    # Calculate the 95% range for model1.xi_sim
+    xi_sim_95_low, xi_sim_50, xi_sim_95_high = np.percentile(model1.xi_sim, [2.5, 50, 97.5])
+
+    # Median values
+    H_median = -model1.ln_m_H_func(xi_sim_50)
+    
+    # Plot
+    plt.figure(figsize=(5, 4))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, model1_values, 'b-', label='1 Year Friction')
+    
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading')
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton_H2, color='gray', linestyle=':', label='Liquid Assets')
+
+    # Plot diamond point
+    plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
+    # Plot diamond point
+    plt.plot(xi_sim_50, H_median, '|', color='black', markersize=15, markeredgewidth=2)
+
+    # Grey out the 95% range over the x-axis
+    plt.fill_between(xi_grid, values_merton, -25, where=((xi_grid >= xi_sim_95_low) & (xi_grid <= xi_sim_95_high)), color='gray', alpha=0.3, label='95% Range')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$-\log(-H(\xi))$')
+    plt.title('Value Function')
+    plt.legend()
+    
+    plt.ylim(top=-17)  # Set the lower bound on the y-axis
+    plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    #plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+    
+def plot_theta_function_1m(model1):
+    # Create the ξ grid
+    xi_grid = model1.xi_fine_grid
+
+    # Extract H values
+    model1_values1 = model1.theta_func[0](xi_grid)*(1-xi_grid)  # H for 1 year
+    model1_values2 = model1.theta_func[1](xi_grid)*(1-xi_grid)  # H for 1 year    
+    values_merton1 = model1.pi_m[0]  # H continuous trading (use 1 year as representative)
+    values_merton2 = model1.pi_m[1]  # H continuous trading (use 1 year as representative)
+
+    #values_merton_H2 = -np.log(-model1.H_m2)  # H continuous trading (use 1 year as representative)
+
+    # Diamond values
+    xi_diamond_1Y = model1.xi_star
+    theta_star_xi1 = model1.theta_star_xi[0]
+    theta_star_xi2 = model1.theta_star_xi[0]
+
+    # Calculate the 95% range for model1.xi_sim
+    xi_sim_95_low, xi_sim_50, xi_sim_95_high = np.percentile(model1.xi_sim, [2.5, 50, 97.5])
+
+    # Median values
+    #theta_median = -model1.theta_func[0](xi_sim_50)
+    
+    # Plot
+    plt.figure(figsize=(5, 4))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, model1_values1, 'b-', label='Uncorrelated Asset')
+    plt.plot(xi_grid, model1_values2, 'grey',':', label='Correlated Asset')
+
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton1, color='gray', linestyle='--', label='Continuous Trading')
+    plt.axhline(values_merton2, color='gray', linestyle='--', label='Continuous Trading')
+
+    # Plot continuous (dashed line, horizontal)
+    #plt.axhline(values_merton_H2, color='gray', linestyle=':', label='Liquid Assets')
+
+    # Plot diamond point
+    plt.plot(xi_diamond_1Y, theta_star_xi1, 'D', color='b')
+    plt.plot(xi_diamond_1Y, theta_star_xi2, 'D', color='b')
+    # Plot diamond point
+    #plt.plot(xi_sim_50, H_median, '|', color='black', markersize=15, markeredgewidth=2)
+
+    # Grey out the 95% range over the x-axis
+    plt.fill_between(xi_grid, values_merton1, 0, where=((xi_grid >= xi_sim_95_low) & (xi_grid <= xi_sim_95_high)), color='gray', alpha=0.3, label='95% Range')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$-\log(-H(\xi))$')
+    plt.title('Liquid Risk Allocation')
+    plt.legend()
+    
+    #plt.ylim(top=-17)  # Set the lower bound on the y-axis
+    #plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    #plt.grid(True)
+    plt.tight_layout()
+    plt.show()    
+
+def plot_alloc_tact(model1, model2, j):
+    # Extract H values
+    model1_values = model1.theta_opt[:,j]*(1-model1.Xi_t)  # H for 1 year
+    model2_values = model2.theta_opt[:,j]*(1-model2.Xi_t)  # H for 10 years
+    values_merton = model1.pi_m[j]  # H continuous trading (use 1year as representative)
+    
+    # Create the ξ grid
+    xi_grid = model1.Xi_t
+
+    # Diamond values
+    xi_diamond_1Y = model1.xi_star
+    H_diamond_1Y = -model1.theta_star_xi*(1-xi_diamond_1Y)
+
+    xi_diamond_10Y = model2.xi_star
+    H_diamond_10Y = -model2.theta_star_xi*(1-xi_diamond_10Y)
+
+    # Plot
+    plt.figure(figsize=(5, 4))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, model1_values, 'b-', label='Model 1')
+    
+    # Plot 10 year (dotted line)
+    plt.plot(xi_grid, model2_values, 'b:', label='Model 2')
+    
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading')
+    
+    # Plot diamond point
+    plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
+    plt.plot(xi_diamond_10Y, H_diamond_10Y, 'D', color='purple')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$\theta(1-\xi)$')
+    plt.title('Liquid Allocation')
     plt.legend()
     
     plt.ylim(bottom=-25)  # Set the lower bound on the y-axis

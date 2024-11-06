@@ -49,9 +49,12 @@ class IlliquidAssetModel:
         self.p = self.trading_probability(eta)
         
         # Merton solution, n assets 
-        self.pi_m, self.c_m, self.H_m = self.merton_solution()
+        self.pi_m, self.c_m, self.H_m = self.merton_solution(self.mu, self.sigma)
         self.alloc_m = np.hstack([1-sum(self.pi_m), self.pi_m])
-        self.cec_m = self.getCec(self.H_m)
+        
+        # Merton liquid assets only
+        self.pi_m2, self.c_m2, self.H_m2 = self.merton_solution(self.mu_w, self.sigma_w[:,:-1])
+        self.cec_m2 = self.getCec(self.H_m2)
         
         # Generate quadrature points and weights
         self.useQuadrature = useQuadrature
@@ -88,7 +91,7 @@ class IlliquidAssetModel:
         return cec
         
         
-    def merton_solution(self):
+    def merton_solution(self, mu, sigma):
         """
         Provides the closed-form solution for the Merton optimal allocation and consumption.
         
@@ -102,11 +105,11 @@ class IlliquidAssetModel:
             Market price of risk.
         """
         # Compute the market price of risk: lambda = sigma^{-1} (mu - r1)
-        mu_minus_r = self.mu - self.r * np.ones(len(self.mu))
-        lambda_ = np.linalg.solve(self.sigma, mu_minus_r)
+        mu_minus_r = mu - self.r * np.ones(len(mu))
+        lambda_ = np.linalg.solve(sigma, mu_minus_r)
         
         # Optimal portfolio allocation: pi = (1 / gamma) * Sigma^{-1} * (mu - r1)
-        pi_opt = (1 / self.gamma) * np.linalg.inv(self.sigma.T) @ lambda_
+        pi_opt = (1 / self.gamma) * np.linalg.inv(sigma.T) @ lambda_
                 
         # Optimal consumption: c = (beta + r(gamma - 1)) / gamma + 0.5 * (gamma - 1) / gamma^2 * ||lambda||^2
         c_opt = (self.beta + self.r * (self.gamma - 1)) / self.gamma + 0.5 * (self.gamma - 1) / (self.gamma**2) * np.dot(lambda_, lambda_)
@@ -217,9 +220,9 @@ class IlliquidAssetModel:
         R_q, xi_next = self.wealth_growth(theta_t, c_t, xi_t)
         'Calculate the terms in the Bellman equation'
         if np.any(xi_next < 0) or np.any(xi_next > 1):  # This checks if any xi_next exceeds 1
-            #ln_m_H_t_val = 2*self.ln_m_H_star    # or just fix to 50 
+            ln_m_H_t_val = 50 #2*self.ln_m_H_star    # or just fix to 50 
             #H_next_illiq = -np.inf  #np.inf  # Enforce H_func going to negative infinity when xi_next > 1            
-            c_t = 0.1**10
+            #c_t = 0.1**10
         #else:                 
         # get intermediate utility
         util = self.utility(c_t * (1 - xi_t))         
@@ -272,24 +275,33 @@ class IlliquidAssetModel:
         ln_m_H_star = min(ln_m_H_grid)
         str_index = np.argmin(ln_m_H_grid)
         xi_star = self.xi_fine_grid[str_index]
-        if finalRun == True:
+        if finalRun == False:
+            return ln_m_H_star, xi_star            
+        else: 
+            # final run calculations 
             'get c star'
-            c_func = self.fit_spline(self.c_opt)
-            c_fine_grid = c_func(self.xi_fine_grid)
-            self.c_star_xi = c_fine_grid[str_index]*(1-xi_star)
+            self.c_func = self.fit_spline(self.c_opt)
+            c_fine_grid = self.c_func(self.xi_fine_grid)
+            c_star_xi = c_fine_grid[str_index]
             'get theta_star' 
-            self.theta_star_xi = np.zeros(self.n-1)
+            theta_star_xi = np.zeros(self.n-1)
+            #collect thetas in a list
+            self.theta_func =[]
             for j in range(self.n-1):
                 theta_func = self.fit_spline(self.theta_opt[:,j])
+                self.theta_func.append(theta_func) 
                 theta_fine_grid = theta_func(self.xi_fine_grid)   
-                self.theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
-            risky_alloc = np.hstack([self.theta_star_xi.T, self.xi_star])
-            self.alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
+                theta_star_xi[j] = theta_fine_grid[str_index]
+            risky_alloc = np.hstack([theta_star_xi.T, xi_star])
+            alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
+            return xi_star, c_star_xi, theta_star_xi, alloc
             #return ln_m_H_star, xi_star, theta_star_xi, c_star_xi
-        return ln_m_H_star, xi_star
     
-    def fit_spline(self, y_value, fitSplit=False):
-        if fitSplit == True: 
+    def fit_spline(self, y_value, fitSplitSpline=False):
+        if fitSplitSpline == False: 
+            fit_fn = interp1d(self.Xi_t, y_value, kind='cubic', fill_value='extrapolate',bounds_error=False)
+            #UnivariateSpline(self.Xi_t, y_value, k=2) #, ext=3, fill_value = 'extrapolate'
+        else: 
             # Split the data into two parts
             mask = self.Xi_t < 0.8
             x1, y1 = self.Xi_t[mask], y_value[mask]
@@ -315,10 +327,6 @@ class IlliquidAssetModel:
                     result[mask] = spline1(x[mask])
                     result[~mask] = spline2(x[~mask])
                     return result
-        else: 
-            fit_fn = interp1d(self.Xi_t, y_value, kind='cubic', fill_value='extrapolate',bounds_error=False)
-            #UnivariateSpline(self.Xi_t, y_value, k=2) #, ext=3, fill_value = 'extrapolate'
-
         return fit_fn
 
     def BellmanIterSolve(self, tol=1e-5, max_iter=600):
@@ -357,7 +365,6 @@ class IlliquidAssetModel:
             #if any(self.H_func(self.xi_fine_grid)> 0):
             #    print('We have a problem')
             'get H_str and xi_str'
-            #self.H_star, self.xi_star = self.getH_str()
             self.ln_m_H_star, self.xi_star  = self.getH_str()
 
 
@@ -375,20 +382,71 @@ class IlliquidAssetModel:
             # Stop if the error is below the tolerance
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
-                #evaluate Certainty Equivalents with final H_function function 
-                self.cec_H_illiq = self.getCec(-np.exp(self.ln_m_H_func(self.Xi_t)))
-                #self.ln_m_H_star, self.xi_star, self.theta_star_xi, self.c_star_xi  = 
-                self.getH_str(True)
-                break
-            
-        else:
-            self.getH_str(True)
+                break            
+        if k == max_iter: 
+            'In case of no convergence'
             print("Failed to converge within the maximum iterations.")
+
+
+        self.getFinalResults(False)
     
         # Keep the plot open after convergence
         #plt.ioff()
         #plt.show()
+        
+    def getFinalResults(self,convergenceIndic):
+        'collect and save the final results'
+        self.xi_star, self.c_star_xi, self.theta_star_xi, self.alloc  = self.getH_str(True)
+        #evaluate Certainty Equivalents with final H_function function 
+        self.cec_il = self.getCec(-np.exp(self.ln_m_H_func(self.Xi_t)))
+        self.allocationBenefit = self.cec_il / self.cec_m2 - 1
+        # Evaluate cec illiquid at xi_star
+        self.cec_il_star = self.getCec(-np.exp(self.ln_m_H_func(self.xi_star)))
+        self.allocationBenefit_star = self.cec_il_star / self.cec_m2 - 1
+        # save convergence indicator
+        self.convergence = convergenceIndic
+        # get simulated values
+        self.xi_sim, self.c_sim, self.theta_sim, self.transfer_sim = self.simulation()
 
+    def simulation(self):
+        # Initialize the path
+        num_simulations = 1000
+        dt_sqrt = np.sqrt(self.dt)
+        
+        # Generate a 1000xN matrix of standard normal shocks
+        dZ_path = np.random.multivariate_normal(mean=np.zeros(self.sigma.shape[0]), cov=np.eye(self.sigma.shape[0]), size=num_simulations)
+        tradeIndic = np.random.binomial(1, self.p, num_simulations)
+        
+        xi_t = np.zeros(num_simulations)
+        c_t = np.zeros(num_simulations)
+        theta_t = np.zeros((num_simulations, self.n-1))
+        transfer = np.zeros(num_simulations)
+        # Initialize variables
+        xi_t[0] = self.xi_star  # Set an initial value for xi_t
+        X, W = np.zeros(num_simulations), np.zeros(num_simulations)
+        W[0], X[0] = 1*(1-xi_t[0]), 1*(xi_t[0])
+        
+        for t in range(num_simulations-1):    
+            # Calculate wealth growth
+            for j in range(self.n-1):
+                theta_t[t, j] = self.theta_func[j](xi_t[t])
+            
+            c_t[t] = self.c_func(xi_t[t])
+            W[t+1] = W[t]* (1 + (self.r + theta_t[t,:]@ (self.mu_w - self.r) - c_t[t]) * self.dt + (theta_t[t,:] @ self.sigma_w @ dZ_path[t]) * dt_sqrt ) 
+            
+            # Calculate illiquid asset growth
+            X[t+1] = X[t]* ( 1 + self.mu_x * self.dt + (self.sigma_x @ dZ_path[t]) * dt_sqrt)
+            # Make transfers
+            xi_before = X[t+1] / (W[t+1] + X[t+1])
+            transfer[t] = (W[t+1]+X[t+1])*(self.xi_star - xi_before) * tradeIndic[t]
+            W[t+1] = W[t+1]- transfer[t]
+            X[t+1]= X[t+1] + transfer[t]
+                                
+            # Update xi_t for next iteration
+            xi_t[t+1] = X[t+1] / (W[t+1]+ X[t+1])
+        
+        return xi_t, c_t, theta_t, transfer
+        
     def plot_results(self, axs=None, lines=None, iteration=None):
         """
         Update the value function, optimal consumption, and portfolio weights in the same plot.
