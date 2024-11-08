@@ -410,7 +410,7 @@ class IlliquidAssetModel:
 
     def simulation(self):
         # Initialize the path
-        num_simulations = 1000
+        num_simulations = 10**5
         dt_sqrt = np.sqrt(self.dt)
         
         # Generate a 1000xN matrix of standard normal shocks

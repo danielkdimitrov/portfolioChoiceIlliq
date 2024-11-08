@@ -55,6 +55,51 @@ def plot_value_function(model1, model2):
     plt.tight_layout()
     plt.show()
     
+# Function to plot panel CEC gain
+def cec_gain(model1, model2):
+    # Extract H values
+    model1_values = 100* model1.allocationBenefit  # H for 1 year
+    model2_values = 100* model2.allocationBenefit # H for 10 years
+    values_merton = 100* (model1.getCec(model1.H_m)/ model1.cec_m2 -1)
+    
+    # Create the ξ grid
+    xi_grid = model1.Xi_t
+
+    # Diamond values
+    xi_diamond_1 = model1.xi_star
+    H_diamond_1 = 100 * model1.allocationBenefit_star
+    xi_diamond_2 = model2.xi_star
+    H_diamond_2 = 100* model2.allocationBenefit_star
+
+    # Plot
+    plt.figure(figsize=(5, 4))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, model1_values, 'b-', label='1 Year Friction')
+    
+    # Plot 10 year (dotted line)
+    plt.plot(xi_grid, model2_values, 'purple',':', label='10 Year Friction')
+    
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading')
+    plt.axhline(0, color='gray', linestyle='-' )
+    
+    # Plot diamond point
+    plt.plot(xi_diamond_1, H_diamond_1, 'D', color='b')
+    plt.plot(xi_diamond_2, H_diamond_2, 'D', color='purple')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$CEC Gain (\%)$')
+    plt.title('Investment Gain')
+    plt.legend()
+    
+    plt.ylim(bottom=-50)  # Set the lower bound on the y-axis
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()    
+    
 def plot_value_function_1m(model1):
     # Create the ξ grid
     xi_grid = model1.xi_fine_grid
@@ -81,9 +126,9 @@ def plot_value_function_1m(model1):
     plt.plot(xi_grid, model1_values, 'b-', label='1 Year Friction')
     
     # Plot continuous (dashed line, horizontal)
-    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading')
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading with Private Asset')
     # Plot continuous (dashed line, horizontal)
-    plt.axhline(values_merton_H2, color='gray', linestyle=':', label='Liquid Assets')
+    plt.axhline(values_merton_H2, color='gray', linestyle=':', label='Continuous Trading ex. Private Asset')
 
     # Plot diamond point
     plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
@@ -119,8 +164,8 @@ def plot_theta_function_1m(model1):
 
     # Diamond values
     xi_diamond_1Y = model1.xi_star
-    theta_star_xi1 = model1.theta_star_xi[0]
-    theta_star_xi2 = model1.theta_star_xi[0]
+    theta_star_xi1 = model1.theta_star_xi[0]*(1-xi_diamond_1Y)
+    theta_star_xi2 = model1.theta_star_xi[1]*(1-xi_diamond_1Y)
 
     # Calculate the 95% range for model1.xi_sim
     xi_sim_95_low, xi_sim_50, xi_sim_95_high = np.percentile(model1.xi_sim, [2.5, 50, 97.5])
@@ -144,7 +189,7 @@ def plot_theta_function_1m(model1):
 
     # Plot diamond point
     plt.plot(xi_diamond_1Y, theta_star_xi1, 'D', color='b')
-    plt.plot(xi_diamond_1Y, theta_star_xi2, 'D', color='b')
+    plt.plot(xi_diamond_1Y, theta_star_xi2, 'D', color='grey')
     # Plot diamond point
     #plt.plot(xi_sim_50, H_median, '|', color='black', markersize=15, markeredgewidth=2)
 
@@ -158,7 +203,7 @@ def plot_theta_function_1m(model1):
     plt.legend()
     
     #plt.ylim(top=-17)  # Set the lower bound on the y-axis
-    #plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    plt.ylim(bottom=0.01)  # Set the lower bound on the y-axis
     #plt.grid(True)
     plt.tight_layout()
     plt.show()    

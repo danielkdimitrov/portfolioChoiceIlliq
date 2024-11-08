@@ -49,6 +49,11 @@ model_1year_corr.plot_results()
 # %% Plot
 plot_value_function_1m(model_10year_corr)
 
+plot_value_function_1m(model_10year)
+
+# %%
+
+
 plot_value_function_1m(model_1year_corr)
 
 
@@ -73,7 +78,7 @@ eta = 1/10
 model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_10year.BellmanIterSolve()
 
-
+# %%
 print(f"10 year, xi_star: {model_10year.xi_star}")
 model_10year.plot_results()
 
