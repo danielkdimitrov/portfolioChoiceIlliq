@@ -7,7 +7,7 @@ Created on Sun Oct 27 18:05:08 2024
 
 import numpy as np
 import matplotlib.pyplot as plt
-
+import os
 
 
 # Function to plot panel (a) Value Function
@@ -100,7 +100,7 @@ def cec_gain(model1, model2):
     plt.tight_layout()
     plt.show()    
     
-def plot_value_function_1m(model1):
+def plot_value_function_1m(model1, save=False, fileName='chart'):
     # Create the ξ grid
     xi_grid = model1.xi_fine_grid
 
@@ -141,16 +141,19 @@ def plot_value_function_1m(model1):
     # Formatting the plot
     plt.xlabel(r'$\xi$')
     plt.ylabel(r'$-\log(-H(\xi))$')
-    plt.title('Value Function')
+    #plt.title('Value Function')
     plt.legend()
     
     plt.ylim(top=-17)  # Set the lower bound on the y-axis
     plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
     #plt.grid(True)
     plt.tight_layout()
-    plt.show()
-    
-def plot_theta_function_1m(model1):
+    if save:
+        saveFig(fileName)
+    else: 
+        plt.show()
+        
+def plot_theta_function_1m(model1, save=False, fileName='chart'):
     # Create the ξ grid
     xi_grid = model1.xi_fine_grid
 
@@ -206,7 +209,11 @@ def plot_theta_function_1m(model1):
     plt.ylim(bottom=0.01)  # Set the lower bound on the y-axis
     #plt.grid(True)
     plt.tight_layout()
-    plt.show()    
+    if save:
+        saveFig(fileName)
+    else: 
+        plt.show()
+
 
 def plot_alloc_tact(model1, model2, j):
     # Extract H values
@@ -253,25 +260,26 @@ def plot_alloc_tact(model1, model2, j):
     plt.show()
     
 
-def plot_allocation_chart(model_alloc_m, model_alloc1, model_alloc2):
+def plot_allocation_chart(model_alloc1_m, model_alloc1, model_alloc2_m, model_alloc2, save=False, fileName='allocation_chart'):
     # Convert to percentage
-    model_alloc_m = np.array(model_alloc_m) * 100
+    model_alloc1_m = np.array(model_alloc1_m) * 100
     model_alloc1 = np.array(model_alloc1) * 100
+    model_alloc2_m = np.array(model_alloc2_m) * 100
     model_alloc2 = np.array(model_alloc2) * 100
 
     # Labels, colors, and hatching patterns for readability in black and white
-    labels = ["cash", "liq 1", "liq 2", "illiq"]
-    colors = ['#4e79a7', '#a0cfa2', '#e15759', '#f1ce63']
-    hatches = ['', '////', '....', 'xxxx']  # Different hatch patterns for each category
+    labels = ["Cash", "Liquid 1", "Liquid 2", "Illiquid"]
+    colors = ['#4e79a7', '#a0cfa2', '#f1ce63', '#e15759']
+    hatches = ['', '\\', '//', '|']  # Different hatch patterns for each category
 
     # Set X-axis positions for the three bars, with narrower spacing
-    x = np.array([0, 1, 2]) * 0.6  # Reduce spacing by reducing the multiplier here
+    x = np.array([0, 1, 2, 3]) * 0.6  # Reduce spacing by reducing the multiplier here
 
     # Plot setup
     fig, ax = plt.subplots(figsize=(8, 5))
 
     # Plot each stacked bar for model_alloc_m, model_alloc1, and model_alloc2
-    for idx, (model, x_pos) in enumerate(zip([model_alloc_m, model_alloc1, model_alloc2], x)):
+    for idx, (model, x_pos) in enumerate(zip([model_alloc1_m, model_alloc1, model_alloc2_m, model_alloc2], x)):
         bottom = 0
         for i in range(len(model)):
             ax.bar(x_pos, model[i], bottom=bottom, color=colors[i], edgecolor='white', 
@@ -283,10 +291,11 @@ def plot_allocation_chart(model_alloc_m, model_alloc1, model_alloc2):
 
     # Labels and legend
     ax.set_xticks(x)
-    ax.set_xticklabels(['Merton Model', 'Model with Illiquidity', 'Alternative Model'], fontsize=12)
+    ax.set_xticklabels(['Continuous', 'Illiquid', 'Continuous Corr.', 'Illiquid Corr.'], fontsize=12)
     ax.set_ylim(0, 100)
     ax.set_ylabel('Allocation Percentage', fontsize=14)
-    ax.legend(labels, loc='upper left', bbox_to_anchor=(1, 1), frameon=False, fontsize=12)
+    handles, labels = ax.get_legend_handles_labels()
+    ax.legend(handles[::-1], labels[::-1], loc='upper left', bbox_to_anchor=(1, 1), frameon=False, fontsize=12)
 
     # Increase general font size for better readability
     plt.xticks(fontsize=12)
@@ -294,7 +303,21 @@ def plot_allocation_chart(model_alloc_m, model_alloc1, model_alloc2):
 
     # Display the plot
     plt.tight_layout()
-    plt.show()
+    if save:
+        # Collect data into a DataFrame
+        data = {
+        'Category': labels,
+        'Model Alloc 1 M': model_alloc1_m,
+        'Model Alloc 1': model_alloc1,
+        'Model Alloc 2 M': model_alloc2_m,
+        'Model Alloc 2': model_alloc2
+        }
+        df = pd.DataFrame(data)
+        saveFig(fileName, df)
+
+    else: 
+        plt.show()
+
     
 
 
@@ -318,3 +341,29 @@ def plot_cec(model):
      plt.xlabel(r'$\xi$')
      plt.ylabel(r'$CEC(\xi)$')
      plt.show()
+     
+
+def saveFig(fileName, df=None):
+    # Get the current folder path
+    current_folder = os.getcwd()
+    
+    # Add the subfolder 'images' to the current folder path
+    images_folder = os.path.join(current_folder, 'images')
+    
+    # Ensure the 'images' folder exists
+    if not os.path.exists(images_folder):
+        os.makedirs(images_folder)
+    
+    # Construct the full file path and save the figure in different formats
+    for ext in ['.pdf', '.png', '.JPG', '.TIF']:
+        file_path = os.path.join(images_folder, fileName + ext)
+        plt.savefig(file_path, bbox_inches='tight')
+    if df is not None:
+        # Save the DataFrame to an Excel file
+        excel_file_path = os.path.join(images_folder, fileName + '.xlsx')
+        df.to_excel(excel_file_path, index=False)
+
+# Example usage
+# saveFig('example_plot', df)
+
+     

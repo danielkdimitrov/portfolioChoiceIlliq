@@ -37,25 +37,6 @@ model_10year_corr = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt, True)
 model_10year_corr.BellmanIterSolve()
 print(f"10 year, xi_star: {model_10year_corr.xi_star}")
 model_10year_corr.plot_results()
-# %% 
-'Run 1 Year model'
-eta = 1
-
-model_1year_corr = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
-model_1year_corr.BellmanIterSolve()
-
-print(f"1 year, xi_star: {model_1year_corr.xi_star}")
-model_1year_corr.plot_results()
-# %% Plot
-plot_value_function_1m(model_10year_corr)
-
-plot_value_function_1m(model_10year)
-
-# %%
-
-
-plot_value_function_1m(model_1year_corr)
-
 
 # %% Three asset case w/ uncorrelated assets
 
@@ -78,9 +59,41 @@ eta = 1/10
 model_10year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_10year.BellmanIterSolve()
 
-# %%
 print(f"10 year, xi_star: {model_10year.xi_star}")
 model_10year.plot_results()
+# %%  PLOT 
+# 10 year
+plot_value_function_1m(model_10year, True, 'valueFn10Yr')
+plot_value_function_1m(model_10year_corr, True, 'valueFn10Yr_corr')
+
+# Plot stachs 
+plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m,  model_10year_corr.alloc, False, 'allocation_liqVsilliq10yr')
+
+
+# %% 1 Year -- Correlated
+correlation_matrix = np.array([
+    [1.0,   0., 0. ],
+    [0.,   1.0, 0.8],
+    [0.,   0.8, 1. ]
+])
+Sigma = np.outer(sigma, sigma) * correlation_matrix
+ 
+'Run 1 Year model'
+eta = 1
+
+model_1year_corr = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
+model_1year_corr.BellmanIterSolve()
+
+print(f"1 year, xi_star: {model_1year_corr.xi_star}")
+model_1year_corr.plot_results()
+
+# %% 1 Year -- Uncorrelated
+
+correlation_matrix = np.array([
+    [1.0,   0., 0.],
+    [0.,   1.0, 0.],
+    [0.,   0., 1.]
+])
 
 'Run 1 Year model'
 eta = 1
@@ -91,10 +104,22 @@ model_1year.BellmanIterSolve()
 print(f"1 year, xi_star: {model_1year.xi_star}")
 model_1year.plot_results()
 
+# %%
+plot_value_function_1m(model_1year_corr, True, 'valueFn10Yr')
+
+plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr')
+plot_value_function_1m(model_1year_corr, False, 'valueFn1Yr')
+
 # %% Plot
 plot_value_function_1m(model_10year)
 
 plot_value_function_1m(model_1year)
+
+# %% 
+# %% Plot
+plot_value_function_1m(model_10year_corr)
+
+plot_value_function_1m(model_10year)
 
 
 # %%
@@ -111,14 +136,14 @@ plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_10year.alloc
 # %%
 '10 Yr corr vs. uncorr'
 # Plot value fn comparison 10 Yr Uncorr vs. Corr
-plot_value_function(model_10year, model_10year_corr)
+plot_value_function(model_10year, model_10year_corr, True, 'valueFn10yr')
 
 # Plot tact alloc 1 Yr vs. 10 Yr
 plot_alloc_tact(model_10year, model_10year_corr,0)
 plot_alloc_tact(model_10year, model_10year_corr,1)
 
 # Plot stachs 
-plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year.alloc)
+plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m,  model_10year_corr.alloc, True, 'allocation_liqVsilliq10yr')
 
 # %%
 '1 Yr corr vs. uncorr'
@@ -133,6 +158,7 @@ plot_alloc_tact(model_1year, model_1year_corr,1)
 # Plot stachs 
 plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc)
 
+plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m, model_10year_corr.alloc)
 
 # %%%%%%%%%%%%%%%%%% TWO ASSET CASE %%%%%%%%%%%%%%%%%% 
 # Define parameters
