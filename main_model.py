@@ -63,8 +63,8 @@ print(f"10 year, xi_star: {model_10year.xi_star}")
 model_10year.plot_results()
 # %%  PLOT 
 # 10 year
-plot_value_function_1m(model_10year, True, 'valueFn10Yr')
-plot_value_function_1m(model_10year_corr, True, 'valueFn10Yr_corr')
+plot_value_function_1m(model_10year, False, 'valueFn10Yr')
+plot_value_function_1m(model_10year_corr, False, 'valueFn10Yr_corr')
 
 # Plot stachs 
 plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m,  model_10year_corr.alloc, False, 'allocation_liqVsilliq10yr')
@@ -80,6 +80,7 @@ Sigma = np.outer(sigma, sigma) * correlation_matrix
  
 'Run 1 Year model'
 eta = 1
+dt = 1/12
 
 model_1year_corr = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_1year_corr.BellmanIterSolve()
@@ -94,9 +95,11 @@ correlation_matrix = np.array([
     [0.,   1.0, 0.],
     [0.,   0., 1.]
 ])
+Sigma = np.outer(sigma, sigma) * correlation_matrix
 
 'Run 1 Year model'
 eta = 1
+dt = 1/12
 
 model_1year = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_1year.BellmanIterSolve()
@@ -104,8 +107,10 @@ model_1year.BellmanIterSolve()
 print(f"1 year, xi_star: {model_1year.xi_star}")
 model_1year.plot_results()
 
+plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr')
+
 # %%
-plot_value_function_1m(model_1year_corr, True, 'valueFn10Yr')
+plot_value_function_1m(model_1year_corr, False, 'valueFn10Yr')
 
 plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr')
 plot_value_function_1m(model_1year_corr, False, 'valueFn1Yr')

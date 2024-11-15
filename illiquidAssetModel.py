@@ -282,16 +282,18 @@ class IlliquidAssetModel:
             'get c star'
             self.c_func = self.fit_spline(self.c_opt)
             c_fine_grid = self.c_func(self.xi_fine_grid)
-            c_star_xi = c_fine_grid[str_index]
+            # get c at xi_star and revaluate from total wealth
+            c_star_xi = c_fine_grid[str_index]**(1-xi_star)
             'get theta_star' 
             theta_star_xi = np.zeros(self.n-1)
             #collect thetas in a list
             self.theta_func =[]
             for j in range(self.n-1):
                 theta_func = self.fit_spline(self.theta_opt[:,j])
-                self.theta_func.append(theta_func) 
+                self.theta_func.append(theta_func)
+                # get theta at xi_star and adjust for xi_star
                 theta_fine_grid = theta_func(self.xi_fine_grid)   
-                theta_star_xi[j] = theta_fine_grid[str_index]
+                theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
             risky_alloc = np.hstack([theta_star_xi.T, xi_star])
             alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
             return xi_star, c_star_xi, theta_star_xi, alloc
@@ -471,6 +473,7 @@ class IlliquidAssetModel:
         axs[2].set_xlabel("xi_t")
         axs[2].set_ylabel("theta_t")
         axs[2].plot(self.Xi_t, self.theta_opt[:,0]*(1-self.Xi_t))
+        axs[2].plot(self.Xi_t, self.theta_opt[:,1]*(1-self.Xi_t))
         plt.show()
         
         '''        
