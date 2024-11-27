@@ -11,6 +11,7 @@ from illiquidAssetModel import IlliquidAssetModel
 from myPlots import *
 import seaborn as sns
 
+
 # %% 
 
 # Define parameters
@@ -19,7 +20,7 @@ sigma = np.array([0.1626]*3)
 gamma = 6.0
 beta = 0.03
 r = 0.02
-dt = 1
+dt = .5
 
 # %% Three asset case w/ correlated assets
 correlation_matrix = np.array([
@@ -48,7 +49,7 @@ correlation_matrix = np.array([
 ])
 Sigma = np.outer(sigma, sigma) * correlation_matrix
 
-gamma = 6.0
+gamma = 3.0
 beta = 0.03
 r = 0.02
 dt = 1
@@ -64,7 +65,7 @@ model_10year.plot_results()
 # %%  PLOT 
 # 10 year
 plot_value_function_1m(model_10year, False, 'valueFn10Yr')
-plot_value_function_1m(model_10year_corr, False, 'valueFn10Yr_corr')
+plot_value_function_1m(model_10year_corr, True, 'valueFn10Yr_corr_gamma_6')
 
 # Plot stachs 
 plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m,  model_10year_corr.alloc, False, 'allocation_liqVsilliq10yr')
@@ -110,10 +111,10 @@ model_1year.plot_results()
 plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr')
 
 # %%
-plot_value_function_1m(model_1year_corr, False, 'valueFn10Yr')
+plot_value_function_1m(model_1year_corr, False, 'valueFn10Yr_gamma_6')
 
-plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr')
-plot_value_function_1m(model_1year_corr, False, 'valueFn1Yr')
+plot_allocation_chart(model_1year.alloc_m, model_1year.alloc, model_1year_corr.alloc_m,  model_1year_corr.alloc, False, 'allocation_liqVsilliq10yr_gamma_6')
+plot_value_function_1m(model_1year_corr, False, 'valueFn1Yr_gamma_6')
 
 # %% Plot
 plot_value_function_1m(model_10year)

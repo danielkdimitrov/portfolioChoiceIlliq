@@ -51,9 +51,11 @@ class IlliquidAssetModel:
         # Merton solution, n assets 
         self.pi_m, self.c_m, self.H_m = self.merton_solution(self.mu, self.sigma)
         self.alloc_m = np.hstack([1-sum(self.pi_m), self.pi_m])
-        
+        self.cec_m = self.getCec(self.H_m)
+
         # Merton liquid assets only
         self.pi_m2, self.c_m2, self.H_m2 = self.merton_solution(self.mu_w, self.sigma_w[:,:-1])
+        self.alloc_2m = np.hstack([1-sum(self.pi_m2), self.pi_m2])
         self.cec_m2 = self.getCec(self.H_m2)
         
         # Generate quadrature points and weights
@@ -280,10 +282,10 @@ class IlliquidAssetModel:
         else: 
             # final run calculations 
             'get c star'
-            self.c_func = self.fit_spline(self.c_opt)
-            c_fine_grid = self.c_func(self.xi_fine_grid)
+            self.c_func = self.fit_spline(self.c_opt )
+            #c_fine_grid = self.c_func(self.xi_fine_grid)
             # get c at xi_star and revaluate from total wealth
-            c_star_xi = c_fine_grid[str_index]**(1-xi_star)
+            c_star_xi = self.c_func(xi_star)*(1-xi_star) #c_fine_grid[str_index]*(1-xi_star)
             'get theta_star' 
             theta_star_xi = np.zeros(self.n-1)
             #collect thetas in a list
@@ -292,8 +294,8 @@ class IlliquidAssetModel:
                 theta_func = self.fit_spline(self.theta_opt[:,j])
                 self.theta_func.append(theta_func)
                 # get theta at xi_star and adjust for xi_star
-                theta_fine_grid = theta_func(self.xi_fine_grid)   
-                theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
+                #theta_fine_grid = theta_func(self.xi_fine_grid)   
+                theta_star_xi[j] =  theta_func(xi_star)*(1-xi_star)
             risky_alloc = np.hstack([theta_star_xi.T, xi_star])
             alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
             return xi_star, c_star_xi, theta_star_xi, alloc
@@ -331,7 +333,7 @@ class IlliquidAssetModel:
                     return result
         return fit_fn
 
-    def BellmanIterSolve(self, tol=1e-5, max_iter=600):
+    def BellmanIterSolve(self, tol=1e-5, max_iter=800):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
@@ -371,7 +373,7 @@ class IlliquidAssetModel:
 
 
             # Print every k-th iteration
-            if k % 25 == 0:
+            if k % 100 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
