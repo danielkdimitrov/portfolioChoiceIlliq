@@ -333,7 +333,7 @@ class IlliquidAssetModel:
                     return result
         return fit_fn
 
-    def BellmanIterSolve(self, tol=1e-5, max_iter=800):
+    def BellmanIterSolve(self, tol=1e-5, max_iter=900):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
@@ -386,19 +386,21 @@ class IlliquidAssetModel:
             # Stop if the error is below the tolerance
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
+                self.convergence = True
                 break            
         if k == max_iter: 
             'In case of no convergence'
+            self.convergence = False
             print("Failed to converge within the maximum iterations.")
 
 
-        self.getFinalResults(False)
+        self.getFinalResults()
     
         # Keep the plot open after convergence
         #plt.ioff()
         #plt.show()
         
-    def getFinalResults(self,convergenceIndic):
+    def getFinalResults(self):
         'collect and save the final results'
         self.xi_star, self.c_star_xi, self.theta_star_xi, self.alloc  = self.getH_str(True)
         #evaluate Certainty Equivalents with final H_function function 
@@ -408,8 +410,7 @@ class IlliquidAssetModel:
         self.cec_il_star = self.getCec(-np.exp(self.ln_m_H_func(self.xi_star)))
         self.allocationBenefit_star = self.cec_il_star / self.cec_m2 - 1
         # save convergence indicator
-        self.convergence = convergenceIndic
-        # get simulated values
+        # get simulated values (scaled for totl wealth)
         self.xi_sim, self.c_sim, self.theta_sim, self.transfer_sim = self.simulation()
 
     def simulation(self):
@@ -449,7 +450,7 @@ class IlliquidAssetModel:
             # Update xi_t for next iteration
             xi_t[t+1] = X[t+1] / (W[t+1]+ X[t+1])
         
-        return xi_t, c_t, theta_t, transfer
+        return xi_t, c_t*(1-xi_t), theta_t*(1-xi_t.reshape(-1, 1)), transfer
         
     def plot_results(self, axs=None, lines=None, iteration=None):
         """
