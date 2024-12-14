@@ -72,6 +72,9 @@ model_10year.plot_results()
 plot_c(model_10year,5, 0.5, True, 'cFn10Yr', False, False)
 plot_c(model_10year_corr,5, 0.5, True, 'cFn10Yr_corr', False, True)
 
+plot_cec(model_10year, True, True, 'cecFn10Yr')
+plot_cec(model_10year_corr, False, True, 'cecFn10Yr_corr')
+
 
 # Plot stachs 
 #plot_allocation_chart(model_10year.alloc_m, model_10year.alloc, model_10year_corr.alloc_m,  model_10year_corr.alloc, False, 'allocation_liqVsilliq10yr')
@@ -127,7 +130,7 @@ eta = 1/10
 model_10year_lp = IlliquidAssetModel(mu, Sigma, gamma, beta, eta, r, dt)
 model_10year_lp.BellmanIterSolve()
 
-print(f"10 year, xi_star: {model_10year.xi_star}")
+print(f"10 year, xi_star: {model_10year_lp.xi_star}")
 model_10year_lp.plot_results()
 # %%  PLOT
  
@@ -139,7 +142,9 @@ model_10year_lp.plot_results()
 plot_c(model_10year_lp,5, 0.5, True, 'cFn10Yr_lp', False,True)
 plot_c(model_10year_corr_lp,5, 0.5, True, 'cFn10Yr_corr_lp', True, True)
 
-
+'Plot CEC'
+plot_cec(model_10year_lp, False, True, 'cecFn10Yr_lp')
+plot_cec(model_10year_corr_lp, False, True, 'cecFn10Yr_corr_lp')
 
 # %%
 '''

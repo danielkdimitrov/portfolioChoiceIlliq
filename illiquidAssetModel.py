@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 class IlliquidAssetModel:
-    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1, useQuadrature=True):
+    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1, useQuadrature=True, longOnly = True):
         '''        
         Parameters
         ----------
@@ -31,7 +31,7 @@ class IlliquidAssetModel:
 
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
-        self.m = 4 #number of quadrature points 
+        self.m = 4 #number of quadrature points -> 4
         
         self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
@@ -68,7 +68,8 @@ class IlliquidAssetModel:
             'Simulated model'
             nSims = 5*10**3
             self.dZ = self.generate_standard_normal(nSims, self.n)
-            
+        
+        self.longOnly = longOnly 
         # Create a grid over xi
         self.gridpoints_Xi = 20
         self.Xi_t = np.linspace(0.,.99, self.gridpoints_Xi)
@@ -257,9 +258,12 @@ class IlliquidAssetModel:
         '''
         #optimize the Bellman equation given a xi_t; Minimize negative of (the log of the negative of) the value function (for optimization)
         objective = lambda params: self.ln_m_H_t_objective(xi_t, params) 
-        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .1)]  # Bounds for optimization
+        bounds = [(0.001, 1) for _ in range(self.mu_w.shape[0])] + [(0.001, .1)]  # Bounds for optimization
         #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, self.init_guess[self.j_gridPoint ,:],method='Nelder-Mead') # bounds=bounds',L-BFGS-B,  
+        if self.longOnly == True:
+            result = minimize(objective, self.init_guess[self.j_gridPoint ,:], bounds=bounds, method='L-BFGS-B',options={'maxiter': 1000, 'ftol': 1e-9}) # ',,   method = 'Nelder-Mead'
+        else: 
+            result = minimize(objective, self.init_guess[self.j_gridPoint ,:], method='Nelder-Mead') # ',,   method = 'Nelder-Mead'
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         #print(result)
 

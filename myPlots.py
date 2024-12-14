@@ -388,29 +388,39 @@ def plot_allocation_chart(model_alloc1_m, model_alloc1, model_alloc2_m, model_al
         plt.show()
 
     
+def plot_cec(model,legend = False, save=False, fileName='allocation_chart'):
+    """
+    Plots the Certainty Equivalent Consumption (CEC) as a function of xi,
+    with a dashed vertical line at xi_star.
+    """
+    # Example CEC curve (replace with actual computations)
+    H_t_vals_opt_k = -np.exp(model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
+    
+    cec_vals = model.getCec(H_t_vals_opt_k)
+    
+    plt.figure(figsize=(4, 3))
+    # Create the plot
+    plt.plot(model.xi_fine_grid, cec_vals*100, color='blue', label =r'$CEC(\xi)$')
 
+    # Add the certical dashed line at cec_m2
+    plt.axvline(x=0, color='gray', linestyle=':',label=r'$\xi=0$')
+    
+    # Add the vertical dashed line at xi_star
+    plt.axvline(x=model.xi_star, color='gray', alpha=0.8, linestyle='-', label=r'$\xi^*$')
 
-def plot_cec(model):
-     """
-     Plots the Certainty Equivalent Consumption (CEC) as a function of xi,
-     with a dashed vertical line at xi_star.
-     """
-     # Example CEC curve (replace with actual computations)
-     H_t_vals_opt_k = -np.exp( model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
-     
-     cec_vals = model.getCec(H_t_vals_opt_k)
-     
-     # Create the plot
-     plt.plot(model.xi_fine_grid, cec_vals, color='blue')
-     
-     # Add the vertical dashed line at xi_star
-     plt.axvline(x=model.xi_star, color='gray', linestyle='--')
-     
-     # Labeling
-     plt.xlabel(r'$\xi$')
-     plt.ylabel(r'$CEC(\xi)$')
-     plt.show()
-     
+    # Add the vertical dashed line at pi_m[-1]
+    plt.axvline(x=model.pi_m[-1], color='gray', alpha=0.99, linestyle='--',label=r'$\xi^{Liquid}$')
+            
+    # Labeling
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$CEC(\xi) (\%)$')
+    if legend == True:
+        plt.legend()
+    if save:
+        saveFig(fileName)
+    else:
+        plt.title(r'Certainty Equivalent Consumption (CEC) vs. $\xi$')
+        plt.show()
 
 def saveFig(fileName, df=None):
     # Get the current folder path
