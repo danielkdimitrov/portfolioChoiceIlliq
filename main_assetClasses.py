@@ -69,8 +69,90 @@ def collect_output(selected_assets, models,fileName):
     # Save the final DataFrame as CSV for further analysis
     df.to_csv(fileName+".csv", index=False)
 
+def setIlliquidAssetList(currentAC):
+    # Load the CSV file
+    file_path = r'data\inputData.csv'
+    df = pd.read_csv(file_path)
+    
+    # Extract the relevant rows and columns
+    selected_assets = [
+        'U.S. Long Treasuries',
+        'U.S. Long Corporate Bonds',
+        #'U.S. Aggregate Bonds', 
+        #'World ex-U.S. Government Bonds hedged',
+        #'U.S. High Yield Bonds', 
+        'U.S. Large Cap', 
+        'U.S. Small Cap',
+        'EAFE Equity',
+        'U.S. REITs',
+        'U.S. Core Real Estate',
+        'Private Equity',
+        'Global Core Infrastructure',
+        'Diversified Hedge Funds',
+        'Macro Hedge Funds'
+    ]
+    # Case switch logic
+    if currentAC == 'U.S. Core Real Estate':
+        assets_to_drop = ['Private Equity',
+                'Global Core Infrastructure',
+                'Diversified Hedge Funds',
+                'Macro Hedge Funds']
+    elif currentAC == 'Private Equity':
+        assets_to_drop = ['U.S. Core Real Estate',
+        'Global Core Infrastructure',
+        'Diversified Hedge Funds',
+        'Macro Hedge Funds']
+    elif currentAC == 'Global Core Infrastructure':
+        assets_to_drop = ['U.S. Core Real Estate',
+        'Private Equity',
+        'Global Core Infrastructure',
+        'Macro Hedge Funds']
+    elif currentAC == 'Diversified Hedge Funds':
+        assets_to_drop = ['U.S. Core Real Estate',
+        'Private Equity',
+        'Global Core Infrastructure',
+        'Macro Hedge Funds']
+    elif currentAC == 'Macro Hedge Funds':
+        assets_to_drop = ['U.S. Core Real Estate',
+        'Private Equity',
+        'Global Core Infrastructure',
+        'Diversified Hedge Funds']  
+    else:
+        assets_to_drop = []
+    
+    # Drop the specified assets
+    selected_assets = [asset for asset in selected_assets if asset not in assets_to_drop]
+    
+    df_selected = df[df['Asset Class'].isin(selected_assets)]
+    
+    # Extract 'Compound Return (%)' as numpy array mu
+    mu = df_selected['Compound Return (%)'].values/100
+    
+    # Extract 'Annualized Volatility (%)' as numpy array sigma
+    sigma = df_selected['Annualized Volatility (%)'].values/100
+    
+    # Extract the correlation matrix for the selected assets
+    correlation_matrix = df_selected[selected_assets].values
+    
+    # Set the diagonal elements to ones and mirror the lower diagonal elements
+    for i in range(len(correlation_matrix)):
+        for j in range(i, len(correlation_matrix)):
+            if i == j:
+                correlation_matrix[i][j] = 1.0
+            else:
+                correlation_matrix[i][j] = correlation_matrix[j][i]
+    
+    Sigma = np.outer(sigma, sigma) * correlation_matrix
+    
+    # Make the correlation matrix positive semidefinite
+    Sigma_psd = nearest_positive_semidefinite(Sigma)
+    
+    print('Eigenvalues of the adjusted cov matrix: ', np.linalg.eigvals(Sigma_psd))
+    print('L1 Norm of the adjusted vs non-adjusted: ',np.linalg.norm(Sigma - Sigma_psd, 'fro')**2)
+    return selected_assets, mu, Sigma_psd, correlation_matrix
 
-# %% PRIVATE EQUITY 
+
+# %% PARAMETERS 
 gamma = 6.0
 beta = 0.031
 r = 0.031
@@ -103,53 +185,10 @@ model_10year.plot_results()
 
 # %% 
 
-# Load the CSV file
-file_path = r'data\inputData.csv'
-df = pd.read_csv(file_path)
-
-# Extract the relevant rows and columns
-selected_assets = [
-    'U.S. Long Treasuries',
-    'U.S. Long Corporate Bonds',
-    #'U.S. Aggregate Bonds', 
-    #'World ex-U.S. Government Bonds hedged',
-    #'U.S. High Yield Bonds', 
-    'U.S. Large Cap', 
-    'U.S. Small Cap',
-    'EAFE Equity',
-    'U.S. REITs',
-    'Private Equity'
-    #'Global Core Infrastructure'
-]
-df_selected = df[df['Asset Class'].isin(selected_assets)]
-
-# Extract 'Compound Return (%)' as numpy array mu
-mu = df_selected['Compound Return (%)'].values/100
-
-# Extract 'Annualized Volatility (%)' as numpy array sigma
-sigma = df_selected['Annualized Volatility (%)'].values/100
-
-# Extract the correlation matrix for the selected assets
-correlation_matrix = df_selected[selected_assets].values
-
-# Set the diagonal elements to ones and mirror the lower diagonal elements
-for i in range(len(correlation_matrix)):
-    for j in range(i, len(correlation_matrix)):
-        if i == j:
-            correlation_matrix[i][j] = 1.0
-        else:
-            correlation_matrix[i][j] = correlation_matrix[j][i]
-
-Sigma = np.outer(sigma, sigma) * correlation_matrix
-
-# Make the correlation matrix positive semidefinite
-Sigma_psd = nearest_positive_semidefinite(Sigma)
-
-print('Eigenvalues of the adjusted cov matrix: ', np.linalg.eigvals(Sigma_psd))
-print('L1 Norm of the adjusted vs non-adjusted: ',np.linalg.norm(Sigma - Sigma_psd, 'fro')**2)
+selected_assets, mu, Sigma_psd, correlation_matrix = setIlliquidAssetList('Diversified Hedge Funds')
 
 # %%
-eta =1/10
+eta =1 #1/10
 
 model_10year_full = IlliquidAssetModel(mu, Sigma_psd, gamma, beta, eta, r, dt, True, True)
 print('Unconstrained Merton Allocations:', model_10year_full.alloc_m)
@@ -169,4 +208,4 @@ model_10year_liq.plot_results()
 print(f"10 year, SAA: {model_10year_liq.alloc}")
 
 # %%
-collect_output(selected_assets, [model_10year_liq, model_10year_full],'private equity')
+collect_output(selected_assets, [model_10year_liq, model_10year_full],'Diversified Hedge Funds')
