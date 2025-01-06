@@ -16,7 +16,8 @@ beta = 0.031
 r = 0.031
 dt = 1.
 
-mu[2] = mu[2]+.03
+'If liquidity premia is added'
+#mu[2] = mu[2]+.03
 
 # Three-asset case with correlated assets
 correlation_matrix = np.array([
@@ -27,12 +28,13 @@ correlation_matrix = np.array([
 Sigma = np.outer(sigma, sigma) * correlation_matrix
 
 # List of eta values to test
-one_over_eta_grid = [5, 15] #np.linspace(1, 15, 15) 
+one_over_eta_grid = np.linspace(1, 15, 15) #[5, 15] #
 
 # %%
 # Placeholder to store results
 ln_m_H_t_vals_opt_k_results = []
 theta_opt_results = []
+c_opt_results = []
 c_sim_results = []
 xi_sim_results = []
 xi_star_results = []
@@ -47,7 +49,8 @@ for one_over_eta in one_over_eta_grid:
     
     # Collect the values
     ln_m_H_t_vals_opt_k_results.append(model.ln_m_H_t_vals_opt_k)
-    theta_opt_results.append(model.theta_opt[:, 0])
+    theta_opt_results.append(model.theta_opt[:, 0]*(1-model.Xi_t))
+    c_opt_results.append(model.c_opt*(1-model.Xi_t))
     c_sim_results.append(model.c_sim)
     xi_sim_results.append(model.xi_sim)
     xi_star_results.append(model.xi_star)
@@ -56,6 +59,12 @@ for one_over_eta in one_over_eta_grid:
 # Convert lists to numpy arrays for easier manipulation
 ln_m_H_t_vals_opt_k_results = np.array(ln_m_H_t_vals_opt_k_results)
 xi_star_results = np.array(xi_star_results)
+
+c_vals_opt_k_results = np.array(c_opt_results)
+theta_vals_results = np.array(theta_opt_results)
+
+
+
 # %%
 
 # Create a grid for eta values and xi_sim values
@@ -67,10 +76,14 @@ fig = plt.figure(figsize=(8,12))
 ax = fig.add_subplot(111, projection='3d')
 
 # Plot the data using plot_wireframe
-ax.plot_wireframe(one_over_eta_mesh_grid, xi_mesh_grid*100, -ln_m_H_t_vals_opt_k_results.T)
+#ax.plot_wireframe(one_over_eta_mesh_grid, xi_mesh_grid*100, -ln_m_H_t_vals_opt_k_results.T)
+
+#ax.plot_wireframe(one_over_eta_mesh_grid, xi_mesh_grid*100, theta_vals_results.T*100)
+
+ax.plot_wireframe(one_over_eta_mesh_grid, xi_mesh_grid*100, c_vals_opt_k_results)
 
 # Plot the curve showing the relationship between one_over_eta and xi_star at the bottom
-ax.plot(one_over_eta_grid, xi_star_results*100, -np.array(ln_m_H_star_results), color='r', marker='o', markersize=8, linewidth=3, label=r'Private Asset SAA ($\xi^*$)')
+#ax.plot(one_over_eta_grid, xi_star_results*100, -np.array(ln_m_H_star_results), color='r', marker='o', markersize=8, linewidth=3, label=r'Private Asset SAA ($\xi^*$)')
 
 # Set labels and z-axis limit with increased font size
 ax.set_xlabel(r'Expected waiting time, ($1/\eta$)', fontsize=15)
@@ -88,7 +101,7 @@ ax.tick_params(axis='both', which='major', labelsize=14)
 plt.tight_layout()
 plt.legend(loc='lower center', bbox_to_anchor=(0.5, -0.05), fontsize=12)
 
-saveFig('valueFn3d')
+saveFig('cFn3d') #'valueFn3d'
 #plt.show()
 
 # %% 3D Histogram plot

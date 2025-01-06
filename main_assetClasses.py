@@ -53,7 +53,7 @@ def collect_output(selected_assets, models,fileName):
     df.loc[len(df)] = ['xi_med', np.percentile(model_liq.xi_sim, 50) * 100, np.percentile(model_illiq.xi_sim, 50) * 100]
     df.loc[len(df)] = ['c_med', np.percentile(model_liq.c_sim, 50) * 100, np.percentile(model_illiq.c_sim, 50) * 100]
     # Add allocation benefit relative to xi = 0
-    df.loc[len(df)] = ['allocation benefit',(model_liq.cec_il_star/ model_liq.cec_il[0] -1)*100 , (model_illiq.cec_il_star/ model_illiq.cec_il[0] -1)*100]
+    df.loc[len(df)] = ['allocation benefit',(model_liq.cec_il_star/ model_illiq.cec_il[0] -1)*100 , (model_illiq.cec_il_star/ model_illiq.cec_il[0] -1)*100]
     
     # Interpolate the cec_il values
     interpolator = interp1d(model_illiq.Xi_t, model_illiq.cec_il)
@@ -105,7 +105,7 @@ def setIlliquidAssetList(currentAC):
     elif currentAC == 'Global Core Infrastructure':
         assets_to_drop = ['U.S. Core Real Estate',
         'Private Equity',
-        'Global Core Infrastructure',
+        'Diversified Hedge Funds',
         'Macro Hedge Funds']
     elif currentAC == 'Diversified Hedge Funds':
         assets_to_drop = ['U.S. Core Real Estate',
@@ -183,12 +183,12 @@ model_10year.plot_results()
 '''
 
 
-# %% 
+# %% Illiquid Case
 
-selected_assets, mu, Sigma_psd, correlation_matrix = setIlliquidAssetList('Diversified Hedge Funds')
+asset_class = 'Private Equity'
+selected_assets, mu, Sigma_psd, correlation_matrix = setIlliquidAssetList(asset_class)
 
-# %%
-eta =1 #1/10
+eta =1/5 #1/10
 
 model_10year_full = IlliquidAssetModel(mu, Sigma_psd, gamma, beta, eta, r, dt, True, True)
 print('Unconstrained Merton Allocations:', model_10year_full.alloc_m)
@@ -198,14 +198,18 @@ model_10year_full.plot_results()
 print(f"10 year, SAA: {model_10year_full.alloc}")
 
 
-# %%
+# %% Liquid Case
+
+selected_assets, mu, Sigma_psd, correlation_matrix = setIlliquidAssetList(asset_class)
+
 eta = 5
 model_10year_liq = IlliquidAssetModel(mu, Sigma_psd, gamma, beta, eta, r, dt, True, True)
 print('Unconstrained Merton Allocations:', model_10year_liq.alloc_m)
 model_10year_liq.BellmanIterSolve()
-print(f"10 year, xi_star: {model_10year_liq.xi_star}")
+print(f"xi_star: {model_10year_liq.xi_star}")
 model_10year_liq.plot_results()
-print(f"10 year, SAA: {model_10year_liq.alloc}")
+print(f"SAA: {model_10year_liq.alloc}")
 
 # %%
-collect_output(selected_assets, [model_10year_liq, model_10year_full],'Diversified Hedge Funds')
+collect_output(selected_assets, [model_10year_liq, model_10year_full],asset_class)
+# %%

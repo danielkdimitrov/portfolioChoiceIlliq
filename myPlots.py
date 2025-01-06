@@ -403,7 +403,7 @@ def plot_cec(model,legend = False, save=False, fileName='allocation_chart'):
     plt.plot(model.xi_fine_grid, cec_vals*100, color='blue', label =r'$CEC(\xi)$')
 
     # Add the certical dashed line at cec_m2
-    plt.axvline(x=0, color='gray', linestyle=':',label=r'$\xi=0$')
+    #plt.axvline(x=0, color='gray', linestyle=':',label=r'$\xi=0$')
     
     # Add the vertical dashed line at xi_star
     plt.axvline(x=model.xi_star, color='gray', alpha=0.8, linestyle='-', label=r'$\xi^*$')
