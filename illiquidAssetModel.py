@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 
 class IlliquidAssetModel:
-    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1, useQuadrature=True):
+    def __init__(self, mu, Sigma, gamma, beta, eta, r, dt=1, useQuadrature=True, longOnly = True):
         '''        
         Parameters
         ----------
@@ -31,7 +31,7 @@ class IlliquidAssetModel:
 
         self.mu_w = mu[:-1]
         self.mu_x = mu[-1]
-        self.m = 4 #number of quadrature points 
+        self.m = 4 #number of quadrature points -> 4
         
         self.Sigma = Sigma
         self.sigma = cholesky(Sigma, lower=True)
@@ -51,9 +51,11 @@ class IlliquidAssetModel:
         # Merton solution, n assets 
         self.pi_m, self.c_m, self.H_m = self.merton_solution(self.mu, self.sigma)
         self.alloc_m = np.hstack([1-sum(self.pi_m), self.pi_m])
-        
+        self.cec_m = self.getCec(self.H_m)
+
         # Merton liquid assets only
         self.pi_m2, self.c_m2, self.H_m2 = self.merton_solution(self.mu_w, self.sigma_w[:,:-1])
+        self.alloc_2m = np.hstack([1-sum(self.pi_m2), self.pi_m2])
         self.cec_m2 = self.getCec(self.H_m2)
         
         # Generate quadrature points and weights
@@ -66,7 +68,8 @@ class IlliquidAssetModel:
             'Simulated model'
             nSims = 5*10**3
             self.dZ = self.generate_standard_normal(nSims, self.n)
-            
+        
+        self.longOnly = longOnly 
         # Create a grid over xi
         self.gridpoints_Xi = 20
         self.Xi_t = np.linspace(0.,.99, self.gridpoints_Xi)
@@ -255,9 +258,12 @@ class IlliquidAssetModel:
         '''
         #optimize the Bellman equation given a xi_t; Minimize negative of (the log of the negative of) the value function (for optimization)
         objective = lambda params: self.ln_m_H_t_objective(xi_t, params) 
-        #bounds = [(0, 1) for _ in range(self.mu_w.shape[0])] + [(0, .1)]  # Bounds for optimization
+        bounds = [(0.001, 1) for _ in range(self.mu_w.shape[0])] + [(0.001, .1)]  # Bounds for optimization
         #init_guess = np.append(0.2 * (1-xi_t)* np.ones(self.mu_w.shape[0]), 0.02*(1-xi_t))  # Initial guess for theta and c        
-        result = minimize(objective, self.init_guess[self.j_gridPoint ,:],method='Nelder-Mead') # bounds=bounds',L-BFGS-B,  
+        if self.longOnly == True:
+            result = minimize(objective, self.init_guess[self.j_gridPoint ,:], bounds=bounds, method='L-BFGS-B',options={'maxiter': 1000, 'ftol': 1e-9}) # ',,   method = 'Nelder-Mead'
+        else: 
+            result = minimize(objective, self.init_guess[self.j_gridPoint ,:], method='Nelder-Mead') # ',,   method = 'Nelder-Mead'
         theta_t_opt, c_t_opt = result.x[:-1], result.x[-1]
         #print(result)
 
@@ -280,10 +286,10 @@ class IlliquidAssetModel:
         else: 
             # final run calculations 
             'get c star'
-            self.c_func = self.fit_spline(self.c_opt)
-            c_fine_grid = self.c_func(self.xi_fine_grid)
+            self.c_func = self.fit_spline(self.c_opt )
+            #c_fine_grid = self.c_func(self.xi_fine_grid)
             # get c at xi_star and revaluate from total wealth
-            c_star_xi = c_fine_grid[str_index]**(1-xi_star)
+            c_star_xi = self.c_func(xi_star)*(1-xi_star) #c_fine_grid[str_index]*(1-xi_star)
             'get theta_star' 
             theta_star_xi = np.zeros(self.n-1)
             #collect thetas in a list
@@ -292,8 +298,8 @@ class IlliquidAssetModel:
                 theta_func = self.fit_spline(self.theta_opt[:,j])
                 self.theta_func.append(theta_func)
                 # get theta at xi_star and adjust for xi_star
-                theta_fine_grid = theta_func(self.xi_fine_grid)   
-                theta_star_xi[j] = theta_fine_grid[str_index]*(1-xi_star)
+                #theta_fine_grid = theta_func(self.xi_fine_grid)   
+                theta_star_xi[j] =  theta_func(xi_star)*(1-xi_star)
             risky_alloc = np.hstack([theta_star_xi.T, xi_star])
             alloc = np.hstack([1- sum(risky_alloc), risky_alloc])
             return xi_star, c_star_xi, theta_star_xi, alloc
@@ -331,7 +337,7 @@ class IlliquidAssetModel:
                     return result
         return fit_fn
 
-    def BellmanIterSolve(self, tol=1e-5, max_iter=600):
+    def BellmanIterSolve(self, tol=1e-5, max_iter=900):
         # Store the optimal controls and value function
         self.theta_opt = np.zeros((self.gridpoints_Xi, len(self.mu_w)))
         self.c_opt = np.zeros(self.gridpoints_Xi)
@@ -371,7 +377,7 @@ class IlliquidAssetModel:
 
 
             # Print every k-th iteration
-            if k % 25 == 0:
+            if k % 100 == 0:
                 print(f"Iteration {k}: ")
                 print(f"               Value Fn Diff = {error:.6f}")
                 print(f"               -ln(-H*) = {-self.ln_m_H_star:.4f}")
@@ -384,19 +390,21 @@ class IlliquidAssetModel:
             # Stop if the error is below the tolerance
             if error < tol:
                 print(f"Converged in {k+1} iterations.")
+                self.convergence = True
                 break            
         if k == max_iter: 
             'In case of no convergence'
+            self.convergence = False
             print("Failed to converge within the maximum iterations.")
 
 
-        self.getFinalResults(False)
+        self.getFinalResults()
     
         # Keep the plot open after convergence
         #plt.ioff()
         #plt.show()
         
-    def getFinalResults(self,convergenceIndic):
+    def getFinalResults(self):
         'collect and save the final results'
         self.xi_star, self.c_star_xi, self.theta_star_xi, self.alloc  = self.getH_str(True)
         #evaluate Certainty Equivalents with final H_function function 
@@ -406,8 +414,7 @@ class IlliquidAssetModel:
         self.cec_il_star = self.getCec(-np.exp(self.ln_m_H_func(self.xi_star)))
         self.allocationBenefit_star = self.cec_il_star / self.cec_m2 - 1
         # save convergence indicator
-        self.convergence = convergenceIndic
-        # get simulated values
+        # get simulated values (scaled for totl wealth)
         self.xi_sim, self.c_sim, self.theta_sim, self.transfer_sim = self.simulation()
 
     def simulation(self):
@@ -447,7 +454,7 @@ class IlliquidAssetModel:
             # Update xi_t for next iteration
             xi_t[t+1] = X[t+1] / (W[t+1]+ X[t+1])
         
-        return xi_t, c_t, theta_t, transfer
+        return xi_t, c_t*(1-xi_t), theta_t*(1-xi_t.reshape(-1, 1)), transfer
         
     def plot_results(self, axs=None, lines=None, iteration=None):
         """

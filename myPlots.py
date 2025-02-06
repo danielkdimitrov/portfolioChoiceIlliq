@@ -8,6 +8,7 @@ Created on Sun Oct 27 18:05:08 2024
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from scipy.interpolate import interp1d
 
 
 # Function to plot panel (a) Value Function
@@ -100,7 +101,7 @@ def cec_gain(model1, model2):
     plt.tight_layout()
     plt.show()    
     
-def plot_value_function_1m(model1, save=False, fileName='chart'):
+def plot_value_function_1m(model1, limitUp, limitDown, save=False, fileName='chart'):
     # Create the ξ grid
     xi_grid = model1.xi_fine_grid
 
@@ -144,14 +145,82 @@ def plot_value_function_1m(model1, save=False, fileName='chart'):
     #plt.title('Value Function')
     plt.legend()
     
-    plt.ylim(top=-17)  # Set the lower bound on the y-axis
-    plt.ylim(bottom=-25)  # Set the lower bound on the y-axis
+    plt.ylim(top=limitUp)  # Set the lower bound on the y-axis
+    plt.ylim(bottom=limitDown)  # Set the lower bound on the y-axis
     #plt.grid(True)
     plt.tight_layout()
     if save:
         saveFig(fileName)
     else: 
         plt.show()
+
+def plot_c(model1, limitUp, limitDown, save=False, fileName='chart', legend=True, smooth=False):
+    # Create the ξ grid
+    xi_grid = model1.xi_fine_grid
+
+    # Extract H values
+    model1_values = model1.c_func(model1.xi_fine_grid)*(1-model1.xi_fine_grid)*100  # H for 1 year
+    values_merton = model1.c_m*100  # H continuous trading (use 1 year as representative)
+    values_merton_H2 = model1.c_m2*100  # H continuous trading (use 1 year as representative)
+    
+    if smooth == True:
+        'Interpolate data at the edges if needed'
+        # Remove values smaller than 2 but keep the last value
+        filtered_data = np.where(model1_values[:-1] < 2, np.nan, model1_values[:-1])
+        filtered_data = np.append(filtered_data, model1_values[-1])
+        
+        # Get indices of valid (non-NaN) values
+        valid_indices = np.where(~np.isnan(filtered_data))[0]
+        
+        # Interpolate to fill NaN values
+        interpolator = interp1d(valid_indices, filtered_data[valid_indices], kind='linear', fill_value="extrapolate")
+        model1_values = interpolator(np.arange(len(filtered_data)))
+
+    # Diamond values
+    xi_diamond_1Y = model1.xi_star
+    H_diamond_1Y = model1.c_star_xi*100
+    
+    # Calculate the 95% range for model1.xi_sim
+    xi_sim_95_low, xi_sim_50, xi_sim_95_high = np.percentile(model1.xi_sim, [2.5, 50, 97.5])
+
+    # Median values
+    H_median = np.percentile(model1.c_sim, 50)*100
+    
+    # Plot
+    plt.figure(figsize=(4, 3))
+    
+    # Plot 1 year (solid line)
+    plt.plot(xi_grid, model1_values, 'b-', label='Illiquid Private Asset')
+    
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton, color='gray', linestyle='--', label='Continuous Trading with Private Asset')
+    # Plot continuous (dashed line, horizontal)
+    plt.axhline(values_merton_H2, color='gray', linestyle=':', label='Continuous Trading ex. Private Asset')
+
+    # Plot diamond point
+    plt.plot(xi_diamond_1Y, H_diamond_1Y, 'D', color='b')
+    # Plot diamond point
+    plt.plot(xi_sim_50, H_median, '|', color='black', markersize=15, markeredgewidth=2)
+
+    # Grey out the 95% range over the x-axis
+    plt.fill_between(xi_grid, values_merton, limitDown, where=((xi_grid >= xi_sim_95_low) & (xi_grid <= xi_sim_95_high)), color='gray', alpha=0.3, label='95% Range')
+
+    # Formatting the plot
+    plt.xlabel(r'$\xi$')
+    plt.ylabel('Consumption Rate (%)')
+    #plt.title('Value Function')
+    if legend == True: 
+        plt.legend()
+    
+    plt.ylim(top=limitUp)  # Set the lower bound on the y-axis
+    plt.ylim(bottom=limitDown)  # Set the lower bound on the y-axis
+    #plt.grid(True)
+    plt.tight_layout()
+    if save:
+        saveFig(fileName)
+    else: 
+        plt.show()
+
         
 def plot_theta_function_1m(model1, save=False, fileName='chart'):
     # Create the ξ grid
@@ -319,29 +388,39 @@ def plot_allocation_chart(model_alloc1_m, model_alloc1, model_alloc2_m, model_al
         plt.show()
 
     
+def plot_cec(model,legend = False, save=False, fileName='allocation_chart'):
+    """
+    Plots the Certainty Equivalent Consumption (CEC) as a function of xi,
+    with a dashed vertical line at xi_star.
+    """
+    # Example CEC curve (replace with actual computations)
+    H_t_vals_opt_k = -np.exp(model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
+    
+    cec_vals = model.getCec(H_t_vals_opt_k)
+    
+    plt.figure(figsize=(4, 3))
+    # Create the plot
+    plt.plot(model.xi_fine_grid, cec_vals*100, color='blue', label =r'$CEC(\xi)$')
 
+    # Add the certical dashed line at cec_m2
+    #plt.axvline(x=0, color='gray', linestyle=':',label=r'$\xi=0$')
+    
+    # Add the vertical dashed line at xi_star
+    plt.axvline(x=model.xi_star, color='gray', alpha=0.8, linestyle='-', label=r'$\xi^*$')
 
-def plot_cec(model):
-     """
-     Plots the Certainty Equivalent Consumption (CEC) as a function of xi,
-     with a dashed vertical line at xi_star.
-     """
-     # Example CEC curve (replace with actual computations)
-     H_t_vals_opt_k = -np.exp( model.ln_m_H_func(model.xi_fine_grid))  # This is just a placeholder
-     
-     cec_vals = model.getCec(H_t_vals_opt_k)
-     
-     # Create the plot
-     plt.plot(model.xi_fine_grid, cec_vals, color='blue')
-     
-     # Add the vertical dashed line at xi_star
-     plt.axvline(x=model.xi_star, color='gray', linestyle='--')
-     
-     # Labeling
-     plt.xlabel(r'$\xi$')
-     plt.ylabel(r'$CEC(\xi)$')
-     plt.show()
-     
+    # Add the vertical dashed line at pi_m[-1]
+    plt.axvline(x=model.pi_m[-1], color='gray', alpha=0.99, linestyle='--',label=r'$\xi^{Liquid}$')
+            
+    # Labeling
+    plt.xlabel(r'$\xi$')
+    plt.ylabel(r'$CEC(\xi) (\%)$')
+    if legend == True:
+        plt.legend()
+    if save:
+        saveFig(fileName)
+    else:
+        plt.title(r'Certainty Equivalent Consumption (CEC) vs. $\xi$')
+        plt.show()
 
 def saveFig(fileName, df=None):
     # Get the current folder path

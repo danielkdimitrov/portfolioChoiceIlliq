@@ -1,0 +1,16 @@
+1/eta,Cash,Liquid 1,Liquid 2,Illiquid 1,Allocation Benefit,cec,xi_sim_2.5%,xi_sim_50%,xi_sim_97.5%,,,c_sim_2.5%,c_sim_50%,c_sim_97.5%,,c,convergence,
+3m,52.09,22.69,12.61,12.61,,3.98,,,,-12.61, -   ,,,, -   ,3.82,,25.22
+0.5,52.38,22.58,12.72,12.33,0.95,3.97,10.75,12.33,15.11,2.78,4.35,3.82,3.82,3.82,0,3.82,True,25.05
+1,52.43,22.58,12.96,12.03,0.94,3.97,9.98,12.03,16.9,4.86,6.92,3.82,3.82,3.82,0,3.82,True,24.99
+2,52.56,22.57,13.48,11.39,0.91,3.97,8.9,11.61,19.65,8.26,10.76,3.82,3.82,3.82,0,3.82,True,24.87
+5,53.04,22.57,15.52,8.86,0.78,3.96,6.27,9.96,27.37,18.51,21.1,3.76,3.81,3.82,0.05,3.82,True,24.38
+10,53.82,22.57,18.7,4.9,0.42,3.95,3.59,6.45,36.92,32.01,33.33,3.29,3.8,3.8,0.51,3.8,True,23.6
+15,54.22,22.57,20.29,2.92,0.15,3.94,2.08,4.38,42.92,40,40.84,2.81,3.79,3.8,0.99,3.8,True,23.21
+20,54.44,22.57,21.16,1.83,-0.03,3.93,1.32,3.25,62.96,61.12,61.64,1.79,3.79,3.79,2,3.79,True,22.99
+25,54.59,22.57,21.75,1.09,-0.15,3.93,0.81,2.2,56.57,55.48,55.76,2,3.78,3.79,1.79,3.79,True,
+30,54.7,22.58,22.17,0.54,-0.21,3.93,0.38,1.3,45.34,44.79,44.95,2.42,3.78,3.78,1.37,3.78,True,
+2m,54.61,22.69,22.69,,,3.93,,,, -   , -   ,,,, -   ,3.78,,
+,,,,,,,,,,,,,,,,,,
+rho = .8,,,,,,,,,,,,,,,,,,
+"- with a friction of up to 5 yr consumption is ok, as the agent can withdraw often enough from eilliquid wealth. With higher illiquidity however, consumption is at risk of falling below the two-asset liquid case",,,,,,,,,,,,,,,,,,
+- with higher friction the investor substitutes the illiquid asset with the liquid one in order to keep a relatively stable exposure of about 25% allocated to the sum of the two (keeping a steady exposure to the risk driver of the two),,,,,,,,,,,,,,,,,,
